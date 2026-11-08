@@ -173,23 +173,6 @@ fun SettingsScreen(
                 }
             }
         }
-                            text = "Множество Порталов (Эксперт)",
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Выбор любых стран, радар сервисов, тестирование задержек",
-                            fontSize = 12.sp,
-                            color = Color.Gray
-                        )
-                    }
-                    if (settings.appInterfaceMode == AppInterfaceMode.MULTI_PORTAL) {
-                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
-        }
 
         Text(
             text = "Внешний вид",
