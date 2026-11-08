@@ -62,6 +62,20 @@ The project has completely evolved into a native, high-performance **Android cli
    - **«Multi-Portal (Expert)»**: full access to all 4 tabs (Gates, Portals, Radar, Settings) with manual server selection and custom target ping tests.
    - Instant 1-tap switching between modes directly in Settings.
 
+9. **Smart AI & Gemini Routing Engine**
+   - Zero regional restrictions for **Google Gemini**, **ChatGPT**, and **Claude**.
+   - Synchronized routing between `AI` and `Google / Youtube / Gemini` selector groups.
+   - Dynamic health-checking across supported destinations (Germany, Finland, Netherlands, Switzerland, USA) with automated fallback when servers time out.
+
+10. **Direct Russian Services Bypass (Zero Detection)**
+    - Banking apps (Sberbank, T-Bank, VTB, Alfa-Bank), public services (Gosuslugi), VK, Yandex, and marketplaces route directly outside the VPN.
+    - Two-layer isolation: OS kernel exclusion (`addDisallowedApplication`) and Mihomo L3/L7 `DIRECT` rules.
+
+11. **In-App Self-Updater from GitHub Releases**
+    - Seamless real-time release check directly inside the application.
+    - Download and in-place upgrade with progress feedback.
+    - Unified release signing (`portal-release.jks`) prevents package signature conflicts.
+
 ---
 
 ## 🏗️ System Architecture
