@@ -102,8 +102,15 @@ class MulticoreVpnService : VpnService() {
                     .setSession("PORTAL VPN")
                     .addAddress("198.18.0.2", 30)
                     .addDnsServer("198.18.0.1")
+                    .addDnsServer("77.88.8.8")
                     .addRoute("0.0.0.0", 0) // Route all IPv4 traffic through VPN
                     .setMtu(1500)
+
+                // Set local HTTP proxy (127.0.0.1:7890) for all system HTTP/HTTPS apps while tun2socks routes L4 TCP/UDP
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    builder.setMetered(false)
+                    builder.setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", 7890))
+                }
 
                 val selectedApps = settings.selectedAppPackages
                 val splitMode = settings.splitTunnelingMode
