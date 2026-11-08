@@ -62,17 +62,17 @@ object MihomoManager {
                                         }
                                     }
 
-                                    // Special AI routing guard: If group is AI or Gemini, ALWAYS route through Finland (🇫🇮 Финляндия).
+                                    // Special AI routing guard: If group is AI, ALWAYS route through Finland (🇫🇮 Финляндия).
                                     // If Finland is unavailable, fallback to Germany or Netherlands.
                                     val isAiGroup = groupKey.equals("AI", ignoreCase = true) || 
-                                                    groupKey.contains("Gemini", ignoreCase = true) ||
-                                                    groupKey.contains("ChatGPT", ignoreCase = true) ||
-                                                    groupKey.contains("OpenAI", ignoreCase = true)
+                                                    groupKey.equals("ChatGPT", ignoreCase = true) ||
+                                                    groupKey.equals("OpenAI", ignoreCase = true)
 
                                     val effectiveTarget = if (isAiGroup) {
                                         allList.firstOrNull { it.contains("Финляндия", ignoreCase = true) }
                                             ?: allList.firstOrNull { it.contains("Германия", ignoreCase = true) }
                                             ?: allList.firstOrNull { it.contains("Нидерланды", ignoreCase = true) }
+                                            ?: allList.firstOrNull { it.contains("Швейцария", ignoreCase = true) }
                                             ?: target
                                     } else {
                                         target
@@ -93,18 +93,14 @@ object MihomoManager {
                 }
 
                 if (!queriedGroups) {
-                    val aiFriendlyKeywords = listOf("Финляндия", "Германия", "Нидерланды", "Швеция", "Швейцария", "Польша", "США")
-                    val isAiRestricted = nodeName.contains("Россия", ignoreCase = true) || 
-                                         nodeName.contains("Эстония", ignoreCase = true) || 
-                                         nodeName.contains("Обход", ignoreCase = true)
                     val groupNames = listOf(
                         "VPN - Main", "Всё остальное", "Telegram", "Google / Youtube / Gemini",
                         "PROXY", "GLOBAL", "Proxy", "GLOBAL-PROXY", "Auto", "Select", "AI",
                         "WhatsApp / IG / FB", "Spotify", "Discord"
                     )
                     for (group in groupNames) {
-                        val isAiGroup = group.equals("AI", ignoreCase = true) || group.contains("Gemini", ignoreCase = true)
-                        val target = if (isAiGroup && isAiRestricted) {
+                        val isAiGroup = group.equals("AI", ignoreCase = true) || group.equals("ChatGPT", ignoreCase = true)
+                        val target = if (isAiGroup) {
                             "🇫🇮 Финляндия"
                         } else {
                             nodeName
