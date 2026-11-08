@@ -8,6 +8,9 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Android APK
@@ -23,9 +26,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
           cache: 'gradle'
-
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Normalize line endings and grant execute permission
         run: |
