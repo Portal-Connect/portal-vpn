@@ -65,6 +65,7 @@ fun SettingsScreen(
     var autoConnectBoot by remember { mutableStateOf(settings.autoConnectOnBoot) }
     var killSwitch by remember { mutableStateOf(settings.killSwitch) }
     var autoFailover by remember { mutableStateOf(settings.autoFailoverEnabled) }
+    var bypassRussianServices by remember { mutableStateOf(settings.bypassRussianServices) }
 
     val scrollState = rememberScrollState()
 
@@ -259,6 +260,51 @@ fun SettingsScreen(
                         Icons.Default.ChevronRight,
                         contentDescription = "Открыть",
                         tint = Color.Gray
+                    )
+                }
+
+                // Direct RU Services Bypass
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "Прямой доступ к сервисам РФ",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "DIRECT",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = "ВК, Госуслуги, Банки (Сбер, Т-Банк, ВТБ), Яндекс, Ozon, WB работают напрямую и не обнаруживают VPN",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            lineHeight = 16.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = bypassRussianServices,
+                        onCheckedChange = {
+                            bypassRussianServices = it
+                            settings.bypassRussianServices = it
+                            onSettingsChanged()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
                     )
                 }
 

@@ -126,6 +126,11 @@ class MulticoreVpnService : VpnService() {
                             Log.w(TAG, "Could not add disallowed app: $pkg", e)
                         }
                     }
+
+                    // Apply automatic OS-level bypass for Russian banks, Gosuslugi, VK, Yandex, marketplaces
+                    if (settings.bypassRussianServices) {
+                        RussianBypassManager.applyOsAppBypass(builder)
+                    }
                 }
 
                 // Disallow self to prevent proxy loop

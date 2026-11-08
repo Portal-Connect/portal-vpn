@@ -40,6 +40,7 @@ class AppSettings(context: Context) {
         private const val KEY_FAVORITES = "favorite_routes"
         private const val KEY_SUB_URL = "sub_url"
         private const val KEY_AUTO_FAILOVER = "auto_failover"
+        private const val KEY_BYPASS_RU_SERVICES = "bypass_ru_services"
     }
 
     var themeMode: ThemeMode
@@ -112,4 +113,8 @@ class AppSettings(context: Context) {
     var autoFailoverEnabled: Boolean
         get() = prefs.getBoolean(KEY_AUTO_FAILOVER, true)
         set(value) = prefs.edit().putBoolean(KEY_AUTO_FAILOVER, value).apply()
+
+    var bypassRussianServices: Boolean
+        get() = prefs.getBoolean(KEY_BYPASS_RU_SERVICES, true)
+        set(value) = prefs.edit().putBoolean(KEY_BYPASS_RU_SERVICES, value).apply()
 }

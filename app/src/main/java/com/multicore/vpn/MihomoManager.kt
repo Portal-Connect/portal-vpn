@@ -363,6 +363,12 @@ $fakeIpFilters
                 for (domain in proxyDomains) {
                     directRulesBuilder.append("  - DOMAIN-SUFFIX,$domain,DIRECT\n")
                 }
+                val settings = AppSettings(context)
+                if (settings.bypassRussianServices) {
+                    for (rule in RussianBypassManager.getMihomoDirectRules()) {
+                        directRulesBuilder.append("  - $rule\n")
+                    }
+                }
                 newContent = newContent.replaceFirst("rules:\n", directRulesBuilder.toString())
             }
 

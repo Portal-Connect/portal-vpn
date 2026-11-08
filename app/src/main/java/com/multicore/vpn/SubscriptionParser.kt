@@ -444,6 +444,9 @@ object SubscriptionParser {
         sb.append("  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve\n")
         sb.append("  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve\n")
         sb.append("  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve\n")
+        for (rule in RussianBypassManager.getMihomoDirectRules()) {
+            sb.append("  - $rule\n")
+        }
         sb.append("  - IP-CIDR,198.18.0.0/15,PROXY,no-resolve\n")
         sb.append("  - IP-CIDR,91.108.4.0/22,PROXY,no-resolve\n")
         sb.append("  - IP-CIDR,91.108.8.0/22,PROXY,no-resolve\n")
