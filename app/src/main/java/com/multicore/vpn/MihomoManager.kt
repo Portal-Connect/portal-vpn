@@ -27,6 +27,7 @@ object MihomoManager {
 
     fun selectProxyNode(nodeName: String) {
         Executors.newSingleThreadExecutor().execute {
+            var cachedAiNode: String? = null
             for (attempt in 1..10) {
                 var queriedGroups = false
                 try {
@@ -65,8 +66,8 @@ object MihomoManager {
                                     // Special AI & Gemini routing guard:
                                     // The subscription contains two groups: "AI" and "Google / Youtube / Gemini".
                                     // To make Gemini always work without country restrictions, both "AI" and "Google / Youtube / Gemini"
-                                    // MUST route through a country where Gemini and Google AI are fully supported:
-                                    // Finland (🇫🇮 Финляндия) -> fallback to Germany (🇩🇪 Германия) -> Netherlands (🇳🇱 Нидерланды).
+                                    // MUST route through a verified alive country where Gemini and Google AI are fully supported:
+                                    // Germany (🇩🇪 Германия) -> Finland (🇫🇮 Финляндия) -> Netherlands (🇳🇱 Нидерланды) -> Switzerland (🇨🇭 Швейцария) -> USA (🇺🇸 США).
                                     val isAiOrGoogleGroup = groupKey.equals("AI", ignoreCase = true) || 
                                                             groupKey.equals("ChatGPT", ignoreCase = true) ||
                                                             groupKey.equals("OpenAI", ignoreCase = true) ||
@@ -74,11 +75,10 @@ object MihomoManager {
                                                             groupKey.contains("Google", ignoreCase = true)
 
                                     val effectiveTarget = if (isAiOrGoogleGroup) {
-                                        allList.firstOrNull { it.contains("Финляндия", ignoreCase = true) }
-                                            ?: allList.firstOrNull { it.contains("Германия", ignoreCase = true) }
-                                            ?: allList.firstOrNull { it.contains("Нидерланды", ignoreCase = true) }
-                                            ?: allList.firstOrNull { it.contains("Швейцария", ignoreCase = true) }
-                                            ?: target
+                                        if (cachedAiNode == null) {
+                                            cachedAiNode = resolveBestAiNode(allList)
+                                        }
+                                        cachedAiNode ?: target
                                     } else {
                                         target
                                     }
@@ -109,7 +109,7 @@ object MihomoManager {
                                                 group.contains("Gemini", ignoreCase = true) ||
                                                 group.contains("Google", ignoreCase = true)
                         val target = if (isAiOrGoogleGroup) {
-                            "🇫🇮 Финляндия"
+                            "🇩🇪 Германия"
                         } else {
                             nodeName
                         }
@@ -148,6 +148,42 @@ object MihomoManager {
             }
         } catch (e: Exception) {
             Log.w(TAG, "Mihomo REST selection error for group $groupName: ${e.message}")
+        }
+    }
+
+    private fun resolveBestAiNode(candidatesPool: List<String>): String? {
+        val countryPreferences = listOf("Германия", "Финляндия", "Нидерланды", "Швейцария", "США")
+        val candidateNodes = mutableListOf<String>()
+        for (country in countryPreferences) {
+            val match = candidatesPool.firstOrNull { it.contains(country, ignoreCase = true) }
+            if (match != null && !candidateNodes.contains(match)) {
+                candidateNodes.add(match)
+            }
+        }
+        for (node in candidateNodes) {
+            if (isNodeAlive(node)) {
+                Log.i(TAG, "Selected verified alive AI node: $node")
+                return node
+            }
+        }
+        return candidateNodes.firstOrNull() ?: candidatesPool.firstOrNull()
+    }
+
+    private fun isNodeAlive(nodeName: String): Boolean {
+        return try {
+            val encoded = URLEncoder.encode(nodeName, "UTF-8").replace("+", "%20")
+            val url = URL("http://127.0.0.1:9090/proxies/$encoded/delay?timeout=1500&url=https%3A%2F%2Fwww.gstatic.com%2Fgenerate_204")
+            val conn = url.openConnection() as HttpURLConnection
+            conn.connectTimeout = 1800
+            conn.readTimeout = 1800
+            if (conn.responseCode == 200) {
+                val resp = conn.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                resp.contains("delay")
+            } else {
+                false
+            }
+        } catch (_: Exception) {
+            false
         }
     }
 
