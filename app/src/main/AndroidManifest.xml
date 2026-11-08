@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"/>
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false"/>
@@ -24,6 +25,15 @@
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
         android:roundIcon="@mipmap/ic_launcher_round">
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <activity
             android:theme="@style/Theme.Multicore"
             android:label="@string/app_name"
@@ -44,7 +54,7 @@
             android:name="com.multicore.vpn.ui.AppSplitTunnelingActivity"
             android:exported="true"/>
         <service
-            android:name="com.multicore.vpn.MulticoreVpnService"
+            android:name="com.multicore.vpn.PortalVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:exported="false"
             android:foregroundServiceType="specialUse">

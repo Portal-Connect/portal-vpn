@@ -90,6 +90,7 @@ import com.multicore.vpn.IpCheckResult
 import com.multicore.vpn.PingTargetService
 import com.multicore.vpn.ServiceCheckResult
 import com.multicore.vpn.TrafficStatsData
+import com.multicore.vpn.UpdateInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -118,10 +119,80 @@ fun MainScreen(
     onSettingsChanged: () -> Unit,
     onOpenSplitTunneling: () -> Unit,
     onToggleFavorite: (String) -> Unit,
-    onStartRadarScan: () -> Unit
+    onStartRadarScan: () -> Unit,
+    updateInfo: UpdateInfo? = null,
+    isDownloadingUpdate: Boolean = false,
+    updateDownloadProgress: Int = 0,
+    currentVersion: String = "1.0.5",
+    isCheckingUpdate: Boolean = false,
+    onCheckUpdate: () -> Unit = {},
+    onStartUpdateDownload: () -> Unit = {},
+    onDismissUpdateDialog: () -> Unit = {}
 ) {
     var selectedTab by remember { mutableStateOf(NavigationTab.HOME) }
     var showAddPortalDialog by remember { mutableStateOf(false) }
+
+    if (updateInfo != null && updateInfo.hasUpdate) {
+        AlertDialog(
+            onDismissRequest = onDismissUpdateDialog,
+            title = {
+                Text(
+                    text = "Обновление Portal VPN v${updateInfo.latestVersion}",
+                    fontWeight = FontWeight.Bold
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Размер файла: ${String.format("%.1f", updateInfo.apkSizeMb)} MB",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                    if (updateInfo.changelog.isNotBlank()) {
+                        Text(
+                            text = updateInfo.changelog,
+                            fontSize = 14.sp
+                        )
+                    }
+                    if (isDownloadingUpdate) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = { updateDownloadProgress / 100f },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            text = "Загрузка обновления: $updateDownloadProgress%",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = onStartUpdateDownload,
+                    enabled = !isDownloadingUpdate
+                ) {
+                    if (isDownloadingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Установить")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isDownloadingUpdate) {
+                    TextButton(onClick = onDismissUpdateDialog) {
+                        Text("Позже")
+                    }
+                }
+            }
+        )
+    }
 
     if (showAddPortalDialog) {
         AddPortalDialog(
@@ -285,7 +356,10 @@ fun MainScreen(
                         onSettingsChanged = onSettingsChanged,
                         onOpenSplitTunneling = onOpenSplitTunneling,
                         onRefreshSubscription = { onImportSubscription(settings.lastSubscriptionUrl) },
-                        onOpenQrScanner = onOpenQrScanner
+                        onOpenQrScanner = onOpenQrScanner,
+                        currentVersion = currentVersion,
+                        isCheckingUpdate = isCheckingUpdate,
+                        onCheckUpdate = onCheckUpdate
                     )
                 }
             }

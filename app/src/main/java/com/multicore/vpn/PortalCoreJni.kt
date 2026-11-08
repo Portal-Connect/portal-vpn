@@ -3,8 +3,8 @@ package com.multicore.vpn
 import android.content.Context
 import android.util.Log
 
-object MulticoreCoreJni {
-    private const val TAG = "MulticoreCoreJni"
+object PortalCoreJni {
+    private const val TAG = "PortalCoreJni"
     private var fallbackRunning = false
     private var fallbackUrl: String? = null
     val DEFAULT_FALLBACK_NODES = emptyList<String>()
@@ -15,7 +15,7 @@ object MulticoreCoreJni {
         get() = false
 
     fun init(context: Context): Boolean {
-        Log.i(TAG, "Initialized MulticoreCore manager (data dir: ${context.filesDir.absolutePath})")
+        Log.i(TAG, "Initialized PortalCore manager (data dir: ${context.filesDir.absolutePath})")
         return true
     }
 

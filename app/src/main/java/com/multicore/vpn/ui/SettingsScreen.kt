@@ -23,10 +23,12 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -57,7 +59,10 @@ fun SettingsScreen(
     onSettingsChanged: () -> Unit,
     onOpenSplitTunneling: () -> Unit,
     onRefreshSubscription: () -> Unit,
-    onOpenQrScanner: (() -> Unit)? = null
+    onOpenQrScanner: (() -> Unit)? = null,
+    currentVersion: String = "1.0.5",
+    isCheckingUpdate: Boolean = false,
+    onCheckUpdate: () -> Unit = {}
 ) {
     var themeMode by remember { mutableStateOf(settings.themeMode) }
     var accentOption by remember { mutableStateOf(settings.accentColor) }
@@ -427,6 +432,52 @@ fun SettingsScreen(
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
+                }
+            }
+        }
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Portal VPN v$currentVersion",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "Автообновление из GitHub Releases",
+                        fontSize = 12.sp,
+                        color = Color.Gray
+                    )
+                }
+                Button(
+                    onClick = onCheckUpdate,
+                    enabled = !isCheckingUpdate,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                ) {
+                    if (isCheckingUpdate) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Icon(Icons.Default.SystemUpdate, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("Обновить", fontSize = 13.sp)
+                    }
                 }
             }
         }

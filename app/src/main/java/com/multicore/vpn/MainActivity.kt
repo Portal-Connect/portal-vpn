@@ -17,8 +17,8 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
-import com.multicore.vpn.ui.AppSplitTunnelingActivity
 import com.multicore.vpn.ui.MainScreen
+import com.multicore.vpn.ui.AppSplitTunnelingActivity
 import com.multicore.vpn.ui.theme.MulticoreTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -28,7 +28,7 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var settings: AppSettings
     private var isConnected by mutableStateOf(false)
-    private var selectedRoute by mutableStateOf(MulticoreCoreJni.getSelectedRoute())
+    private var selectedRoute by mutableStateOf(PortalCoreJni.getSelectedRoute())
     private var showRouteBottomSheet by mutableStateOf(false)
     private var isPinging by mutableStateOf(false)
     private var selectedPingTarget by mutableStateOf(PingTargetService.YOUTUBE)
@@ -40,6 +40,12 @@ class MainActivity : ComponentActivity() {
     private val pingsMap = mutableStateMapOf<String, Int>()
     private var radarResults by mutableStateOf<Map<String, ServiceCheckResult>>(emptyMap())
     private var isRadarScanning by mutableStateOf(false)
+
+    // Update state
+    private var updateInfo by mutableStateOf<UpdateInfo?>(null)
+    private var isCheckingUpdate by mutableStateOf(false)
+    private var isDownloadingUpdate by mutableStateOf(false)
+    private var updateDownloadProgress by mutableIntStateOf(0)
 
     private val vpnPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -90,7 +96,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = AppSettings(this)
-        MulticoreCoreJni.init(this)
+        PortalCoreJni.init(this)
 
         val failoverFilter = android.content.IntentFilter(PortalFailoverWatchdog.ACTION_PORTAL_FAILOVER)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -100,16 +106,19 @@ class MainActivity : ComponentActivity() {
         }
         if (settings.lastSubscriptionUrl.isNotBlank()) {
             lifecycleScope.launch {
-                MulticoreCoreJni.importSubscriptionAsync(settings.lastSubscriptionUrl)
+                PortalCoreJni.importSubscriptionAsync(settings.lastSubscriptionUrl)
                 SubscriptionParser.saveLastConfigToFile(java.io.File(filesDir, "config.yaml"))
                 refreshRoutes()
-                selectedRoute = MulticoreCoreJni.getSelectedRoute()
+                selectedRoute = PortalCoreJni.getSelectedRoute()
                 triggerPingAll()
             }
         }
         refreshRoutes()
         triggerPingAll()
         startTrafficMonitor()
+
+        // Background check for update on app startup
+        checkForUpdates(showToastIfLatest = false)
 
         setContent {
             themeRecomposeTrigger.let {}
@@ -131,6 +140,20 @@ class MainActivity : ComponentActivity() {
                     showRouteBottomSheet = showRouteBottomSheet,
                     radarResults = radarResults,
                     isRadarScanning = isRadarScanning,
+                    updateInfo = updateInfo,
+                    isDownloadingUpdate = isDownloadingUpdate,
+                    updateDownloadProgress = updateDownloadProgress,
+                    currentVersion = BuildConfig.VERSION_NAME,
+                    isCheckingUpdate = isCheckingUpdate,
+                    onCheckUpdate = {
+                        checkForUpdates(showToastIfLatest = true)
+                    },
+                    onStartUpdateDownload = {
+                        startUpdateDownload()
+                    },
+                    onDismissUpdateDialog = {
+                        updateInfo = null
+                    },
                     onToggleConnection = {
                         if (availableRoutes.isEmpty()) {
                             Toast.makeText(this, "Сначала добавьте сеть порталов", Toast.LENGTH_SHORT).show()
@@ -142,11 +165,11 @@ class MainActivity : ComponentActivity() {
                         }
                     },
                     onSelectRoute = { newRoute ->
-                        MulticoreCoreJni.setSelectedRoute(newRoute)
+                        PortalCoreJni.setSelectedRoute(newRoute)
                         selectedRoute = newRoute
                         ipCheckResult = IpCheckResult(ip = "Сканирование...", country = "Смена портала...", isProtected = true)
                         MihomoManager.selectProxyNode(newRoute)
-                        if (MulticoreVpnService.isRunning) {
+                        if (PortalVpnService.isRunning) {
                             SingBoxManager.startSingBox(this, newRoute)
                         }
                         Toast.makeText(this, "Портал настроен: $newRoute", Toast.LENGTH_SHORT).show()
@@ -208,13 +231,43 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        isConnected = MulticoreVpnService.isRunning
+        isConnected = PortalVpnService.isRunning
         refreshRoutes()
-        selectedRoute = MulticoreCoreJni.getSelectedRoute()
+        selectedRoute = PortalCoreJni.getSelectedRoute()
         themeRecomposeTrigger++
         triggerPingAll()
         if (isConnected) {
             triggerIpCheck()
+        }
+    }
+
+    private fun checkForUpdates(showToastIfLatest: Boolean) {
+        if (isCheckingUpdate) return
+        isCheckingUpdate = true
+        lifecycleScope.launch {
+            val result = PortalUpdateManager.checkForUpdates(BuildConfig.VERSION_NAME)
+            isCheckingUpdate = false
+            if (result.hasUpdate) {
+                updateInfo = result
+            } else if (showToastIfLatest) {
+                Toast.makeText(this@MainActivity, "У вас установлена последняя версия (${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    private fun startUpdateDownload() {
+        val info = updateInfo ?: return
+        if (isDownloadingUpdate) return
+        isDownloadingUpdate = true
+        updateDownloadProgress = 0
+        lifecycleScope.launch {
+            val success = PortalUpdateManager.downloadAndInstallApk(this@MainActivity, info.downloadUrl) { progress ->
+                updateDownloadProgress = progress
+            }
+            isDownloadingUpdate = false
+            if (!success) {
+                Toast.makeText(this@MainActivity, "Не удалось скачать обновление. Проверьте сеть", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -241,7 +294,7 @@ class MainActivity : ComponentActivity() {
             ipCheckResult = if (result.ip.isNotBlank() && result.ip != "—") {
                 result
             } else {
-                if (MulticoreVpnService.isRunning) {
+                if (PortalVpnService.isRunning) {
                     IpCheckResult(ip = "Сбой узла", country = "Маршрут недоступен", isProtected = false)
                 } else {
                     IpCheckResult()
@@ -255,10 +308,10 @@ class MainActivity : ComponentActivity() {
         if (trimmed.isBlank()) return
         Toast.makeText(this, "Синхронизация сети порталов...", Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
-            val routes = MulticoreCoreJni.importSubscriptionAsync(trimmed)
+            val routes = PortalCoreJni.importSubscriptionAsync(trimmed)
             SubscriptionParser.saveLastConfigToFile(java.io.File(filesDir, "config.yaml"))
             refreshRoutes()
-            selectedRoute = MulticoreCoreJni.getSelectedRoute()
+            selectedRoute = PortalCoreJni.getSelectedRoute()
             val count = routes.size
             if (count > 0) {
                 settings.lastSubscriptionUrl = trimmed
@@ -273,10 +326,10 @@ class MainActivity : ComponentActivity() {
 
     private fun refreshRoutes() {
         availableRoutes.clear()
-        val routes = MulticoreCoreJni.getAvailableRoutes()
+        val routes = PortalCoreJni.getAvailableRoutes()
         availableRoutes.addAll(routes)
         if (routes.isNotEmpty() && selectedRoute.isBlank()) {
-            selectedRoute = MulticoreCoreJni.getSelectedRoute()
+            selectedRoute = PortalCoreJni.getSelectedRoute()
         }
     }
 
@@ -314,7 +367,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startVpnService() {
-        MulticoreVpnService.start(this)
+        PortalVpnService.start(this)
         isConnected = true
         TrafficStatsManager.resetSession()
         ipCheckResult = IpCheckResult(ip = "", country = "Активация портала...")
@@ -326,7 +379,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun stopVpnService() {
-        MulticoreVpnService.stop(this)
+        PortalVpnService.stop(this)
         isConnected = false
         ipCheckResult = IpCheckResult()
         lifecycleScope.launch {

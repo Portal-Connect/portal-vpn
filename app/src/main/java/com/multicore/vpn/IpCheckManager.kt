@@ -42,7 +42,7 @@ object IpCheckManager {
     }
 
     suspend fun checkPublicIpAsync(): IpCheckResult = withContext(Dispatchers.IO) {
-        val useProxy = MulticoreVpnService.isRunning || isProxyListening()
+        val useProxy = PortalVpnService.isRunning || isProxyListening()
         val client = createCleanClient(useProxy)
 
         // Primary: ipwho.is

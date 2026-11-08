@@ -198,7 +198,7 @@ object ServiceRadarManager {
     }
 
     suspend fun checkAllServices(useProxyOverride: Boolean? = null): Map<String, ServiceCheckResult> = withContext(Dispatchers.IO) {
-        val useProxy = useProxyOverride ?: (MulticoreVpnService.isRunning || isProxyListening())
+        val useProxy = useProxyOverride ?: (PortalVpnService.isRunning || isProxyListening())
         val client = buildClient(useProxy)
 
         val deferredResults = DEFAULT_SERVICES.map { service ->

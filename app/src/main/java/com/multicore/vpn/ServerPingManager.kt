@@ -63,7 +63,7 @@ object ServerPingManager {
         val startTime = System.currentTimeMillis()
         try {
             Socket().use { socket ->
-                MulticoreVpnService.protectSocket(socket)
+                PortalVpnService.protectSocket(socket)
                 socket.connect(InetSocketAddress(host, port), 2500)
                 val latency = (System.currentTimeMillis() - startTime).toInt()
                 Log.d(TAG, "TCP socket fallback ping for $route ($host:$port): ${latency}ms")

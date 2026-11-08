@@ -6,7 +6,7 @@ import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.util.Log
 import androidx.annotation.RequiresApi
-import com.multicore.vpn.MulticoreVpnService
+import com.multicore.vpn.PortalVpnService
 import com.multicore.vpn.R
 
 @RequiresApi(Build.VERSION_CODES.N)
@@ -23,10 +23,10 @@ class VpnTileService : TileService() {
     override fun onClick() {
         super.onClick()
         Log.i(TAG, "Quick Settings Tile clicked")
-        if (MulticoreVpnService.isRunning) {
-            MulticoreVpnService.stop(this)
+        if (PortalVpnService.isRunning) {
+            PortalVpnService.stop(this)
         } else {
-            MulticoreVpnService.start(this)
+            PortalVpnService.start(this)
         }
         updateTileState()
     }
@@ -34,7 +34,7 @@ class VpnTileService : TileService() {
     private fun updateTileState() {
         val tile = qsTile ?: return
         tile.icon = Icon.createWithResource(this, R.drawable.ic_stat_portal)
-        if (MulticoreVpnService.isRunning) {
+        if (PortalVpnService.isRunning) {
             tile.state = Tile.STATE_ACTIVE
             tile.label = "В портале"
         } else {

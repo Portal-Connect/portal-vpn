@@ -20,13 +20,13 @@ import kotlinx.coroutines.*
 import java.io.File
 import java.net.Socket
 
-class MulticoreVpnService : VpnService() {
+class PortalVpnService : VpnService() {
 
     companion object {
-        const val TAG = "MulticoreVpnService"
+        const val TAG = "PortalVpnService"
         const val ACTION_START_VPN = "com.multicore.vpn.START_VPN"
         const val ACTION_STOP_VPN = "com.multicore.vpn.STOP_VPN"
-        const val CHANNEL_ID = "multicore_vpn_channel"
+        const val CHANNEL_ID = "portal_vpn_channel"
         const val NOTIFICATION_ID = 1001
 
         @Volatile
@@ -34,17 +34,17 @@ class MulticoreVpnService : VpnService() {
             private set
 
         @Volatile
-        private var instance: MulticoreVpnService? = null
+        private var instance: PortalVpnService? = null
 
         fun start(context: Context) {
-            val intent = Intent(context, MulticoreVpnService::class.java).apply {
+            val intent = Intent(context, PortalVpnService::class.java).apply {
                 action = ACTION_START_VPN
             }
             ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {
-            val intent = Intent(context, MulticoreVpnService::class.java).apply {
+            val intent = Intent(context, PortalVpnService::class.java).apply {
                 action = ACTION_STOP_VPN
             }
             context.startService(intent)
@@ -90,14 +90,14 @@ class MulticoreVpnService : VpnService() {
 
         serviceScope.launch {
             try {
-                val settings = AppSettings(this@MulticoreVpnService)
+                val settings = AppSettings(this@PortalVpnService)
                 val subUrl = settings.lastSubscriptionUrl.ifBlank {
                     // Fallback to demo/default if not set
                     "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt"
                 }
 
-                val selectedRoute = MulticoreCoreJni.getSelectedRoute()
-                Log.i(TAG, "Starting Dual-Core VPN session (Xray + Mihomo) for route: $selectedRoute")
+                val selectedRoute = PortalCoreJni.getSelectedRoute()
+                Log.i(TAG, "Starting Portal VPN session (Xray + Mihomo) for route: $selectedRoute")
 
                 val builder = Builder()
                     .setSession("PORTAL VPN")
@@ -174,11 +174,11 @@ class MulticoreVpnService : VpnService() {
                 }
 
                 // Start proxy engines
-                SingBoxManager.startSingBox(this@MulticoreVpnService, selectedRoute)
-                MihomoManager.startMihomoAsync(this@MulticoreVpnService, subUrl, tunFd, pfd)
+                SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
+                MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
 
                 // Start in-process native L3 tun2socks router for Telegram and all apps
-                Tun2SocksManager.start(this@MulticoreVpnService, tunFd, "127.0.0.1:7890")
+                Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
 
                 serviceScope.launch {
                     delay(1200)
@@ -187,9 +187,9 @@ class MulticoreVpnService : VpnService() {
 
                 isRunning = true
                 TrafficStatsManager.resetSession()
-                VpnWidgetProvider.notifyWidgetUpdate(this@MulticoreVpnService)
-                PortalFailoverWatchdog.start(this@MulticoreVpnService)
-                Log.i(TAG, "MULTICORE Dual-Core VPN Service started successfully (Xray + Mihomo) with Failover Watchdog")
+                VpnWidgetProvider.notifyWidgetUpdate(this@PortalVpnService)
+                PortalFailoverWatchdog.start(this@PortalVpnService)
+                Log.i(TAG, "Portal VPN Service started successfully (Xray + Mihomo) with Failover Watchdog")
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting VPN session", e)
                 stopVpnSession()
@@ -245,7 +245,7 @@ class MulticoreVpnService : VpnService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val stopIntent = Intent(this, MulticoreVpnService::class.java).apply {
+        val stopIntent = Intent(this, PortalVpnService::class.java).apply {
             action = ACTION_STOP_VPN
         }
         val stopPendingIntent = PendingIntent.getService(

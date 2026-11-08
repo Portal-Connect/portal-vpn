@@ -11,7 +11,7 @@ import android.os.Build
 import android.util.Log
 import android.widget.RemoteViews
 import com.multicore.vpn.MainActivity
-import com.multicore.vpn.MulticoreVpnService
+import com.multicore.vpn.PortalVpnService
 import com.multicore.vpn.R
 
 class VpnWidgetProvider : AppWidgetProvider() {
@@ -22,7 +22,7 @@ class VpnWidgetProvider : AppWidgetProvider() {
 
         fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val views = RemoteViews(context.packageName, R.layout.vpn_widget_layout)
-            val isRunning = MulticoreVpnService.isRunning
+            val isRunning = PortalVpnService.isRunning
             if (isRunning) {
                 views.setTextViewText(R.id.widget_status, "В портале")
                 views.setTextColor(R.id.widget_status, Color.parseColor("#00F5A0"))
@@ -72,10 +72,10 @@ class VpnWidgetProvider : AppWidgetProvider() {
         Log.i(TAG, "VpnWidgetProvider onReceive: $action")
         when (action) {
             ACTION_TOGGLE_VPN -> {
-                if (MulticoreVpnService.isRunning) {
-                    MulticoreVpnService.stop(context)
+                if (PortalVpnService.isRunning) {
+                    PortalVpnService.stop(context)
                 } else {
-                    MulticoreVpnService.start(context)
+                    PortalVpnService.start(context)
                 }
             }
             ACTION_UPDATE_WIDGET, Intent.ACTION_BOOT_COMPLETED -> {

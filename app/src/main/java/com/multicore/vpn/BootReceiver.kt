@@ -16,8 +16,8 @@ class BootReceiver : BroadcastReceiver() {
         if (action == Intent.ACTION_BOOT_COMPLETED || action == "android.intent.action.QUICKBOOT_POWERON") {
             val settings = AppSettings(context)
             if (settings.autoConnectOnBoot) {
-                Log.i(TAG, "AutoConnectOnBoot is enabled; launching MulticoreVpnService...")
-                MulticoreVpnService.start(context)
+                Log.i(TAG, "AutoConnectOnBoot is enabled; launching PortalVpnService...")
+                PortalVpnService.start(context)
             } else {
                 Log.i(TAG, "AutoConnectOnBoot is disabled; skipping VPN auto-start")
             }

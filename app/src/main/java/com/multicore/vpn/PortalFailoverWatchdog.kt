@@ -51,7 +51,7 @@ object PortalFailoverWatchdog {
             lastCheckStatus = "Запуск мониторинга..."
             delay(INITIAL_DELAY_MS)
 
-            while (isActive && MulticoreVpnService.isRunning) {
+            while (isActive && PortalVpnService.isRunning) {
                 performHealthCheckAndFailover(context)
                 delay(CHECK_INTERVAL_MS)
             }
@@ -73,13 +73,13 @@ object PortalFailoverWatchdog {
             return true
         }
 
-        val currentRoute = MulticoreCoreJni.getSelectedRoute()
+        val currentRoute = PortalCoreJni.getSelectedRoute()
         if (currentRoute.isBlank()) {
             lastCheckStatus = "Портал не выбран"
             return true
         }
 
-        val availableRoutes = MulticoreCoreJni.getAvailableRoutes()
+        val availableRoutes = PortalCoreJni.getAvailableRoutes()
         if (availableRoutes.size <= 1) {
             Log.d(TAG, "Only 1 portal available, failover not possible")
             lastCheckStatus = "Единственный портал"
@@ -147,13 +147,13 @@ object PortalFailoverWatchdog {
         Log.i(TAG, "Failover target identified: '$newRoute' (${newPing}ms). Switching cores...")
 
         // 1. Update global selected route in JNI
-        MulticoreCoreJni.setSelectedRoute(newRoute)
+        PortalCoreJni.setSelectedRoute(newRoute)
 
         // 2. Switch Mihomo proxy node
         MihomoManager.selectProxyNode(newRoute)
 
         // 3. Switch SingBox / Xray outbound if running
-        if (MulticoreVpnService.isRunning) {
+        if (PortalVpnService.isRunning) {
             SingBoxManager.startSingBox(context, newRoute)
         }
 
