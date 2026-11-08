@@ -187,12 +187,7 @@ object RussianBypassManager {
             "DOMAIN-SUFFIX,qq.com,DIRECT",
             "DOMAIN-SUFFIX,tencent.com,DIRECT",
             "DOMAIN-KEYWORD,wechat,DIRECT",
-            "DOMAIN-KEYWORD,weixin,DIRECT",
-            "GEOSITE,wechat,DIRECT",
-
-            // Геолокационные справочники Clash/Mihomo
-            "GEOSITE,category-ru,DIRECT",
-            "GEOIP,RU,DIRECT"
+            "DOMAIN-KEYWORD,weixin,DIRECT"
         )
     }
 }

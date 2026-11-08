@@ -74,13 +74,23 @@ object MihomoManager {
                                                             groupKey.contains("Gemini", ignoreCase = true) ||
                                                             groupKey.contains("Google", ignoreCase = true)
 
-                                    val effectiveTarget = if (isAiOrGoogleGroup) {
-                                        if (cachedAiNode == null) {
-                                            cachedAiNode = resolveBestAiNode(allList)
+                                    val isTelegramGroup = groupKey.equals("Telegram", ignoreCase = true) ||
+                                                          groupKey.contains("Telegram", ignoreCase = true)
+
+                                    val effectiveTarget = when {
+                                        isAiOrGoogleGroup -> {
+                                            if (cachedAiNode == null) {
+                                                cachedAiNode = resolveBestAiNode(allList)
+                                            }
+                                            cachedAiNode ?: target
                                         }
-                                        cachedAiNode ?: target
-                                    } else {
-                                        target
+                                        isTelegramGroup -> {
+                                            // Telegram works reliably via target node or fallback to any non-restricted node
+                                            target ?: allList.firstOrNull { 
+                                                !it.contains("Россия", ignoreCase = true) && !it.contains("Обход", ignoreCase = true) 
+                                            } ?: allList.firstOrNull()
+                                        }
+                                        else -> target
                                     }
 
                                     if (effectiveTarget != null) {
@@ -448,8 +458,6 @@ $fakeIpFilters
                 if (settings.bypassRussianServices) {
                     // Route Telegram through proxy group first, before general RU bypass rules
                     val tgTarget = if (content.contains("name: Telegram")) "Telegram" else "PROXY"
-                    directRulesBuilder.append("  - GEOSITE,telegram,$tgTarget\n")
-                    directRulesBuilder.append("  - GEOIP,telegram,$tgTarget\n")
                     directRulesBuilder.append("  - IP-CIDR,91.108.4.0/22,$tgTarget,no-resolve\n")
                     directRulesBuilder.append("  - IP-CIDR,91.108.8.0/22,$tgTarget,no-resolve\n")
                     directRulesBuilder.append("  - IP-CIDR,91.108.12.0/22,$tgTarget,no-resolve\n")
@@ -464,6 +472,9 @@ $fakeIpFilters
                     directRulesBuilder.append("  - DOMAIN-SUFFIX,telegram.org,$tgTarget\n")
                     directRulesBuilder.append("  - DOMAIN-SUFFIX,telegram.me,$tgTarget\n")
                     directRulesBuilder.append("  - DOMAIN-SUFFIX,tdesktop.com,$tgTarget\n")
+                    directRulesBuilder.append("  - DOMAIN-SUFFIX,telegra.ph,$tgTarget\n")
+                    directRulesBuilder.append("  - DOMAIN-SUFFIX,telesco.pe,$tgTarget\n")
+                    directRulesBuilder.append("  - DOMAIN-KEYWORD,telegram,$tgTarget\n")
 
                     for (rule in RussianBypassManager.getMihomoDirectRules()) {
                         directRulesBuilder.append("  - $rule\n")
