@@ -388,7 +388,7 @@ fun SettingsScreen(
                         }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
-                            text = "ВК, Госуслуги, Банки (Сбер, Т-Банк, ВТБ), Яндекс, Ozon, WB работают напрямую и не обнаруживают VPN",
+                            text = "ВК, WeChat, Госуслуги, Банки (Сбер, Т-Банк, ВТБ), Яндекс, Ozon, WB работают напрямую и не обнаруживают VPN",
                             fontSize = 12.sp,
                             color = Color.Gray,
                             lineHeight = 16.sp

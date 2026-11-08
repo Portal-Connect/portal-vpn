@@ -81,7 +81,12 @@ object RussianBypassManager {
         "ru.mts.mymts",
         "ru.megafon.mlk",
         "ru.beeline.services",
-        "ru.tele2.mytele2"
+        "ru.tele2.mytele2",
+
+        // WeChat & Tencent
+        "com.tencent.mm",
+        "com.tencent.mobileqq",
+        "com.tencent.tmgp.sgame"
     )
 
     /**
@@ -173,6 +178,17 @@ object RussianBypassManager {
             "DOMAIN-SUFFIX,avito.ru,DIRECT",
             "DOMAIN-SUFFIX,avito.st,DIRECT",
             "DOMAIN-SUFFIX,megamarket.ru,DIRECT",
+
+            // WeChat / Weixin / Tencent (Прямой доступ без блокировок аккаунтов)
+            "DOMAIN-SUFFIX,wechat.com,DIRECT",
+            "DOMAIN-SUFFIX,weixin.qq.com,DIRECT",
+            "DOMAIN-SUFFIX,qpic.cn,DIRECT",
+            "DOMAIN-SUFFIX,tenpay.com,DIRECT",
+            "DOMAIN-SUFFIX,qq.com,DIRECT",
+            "DOMAIN-SUFFIX,tencent.com,DIRECT",
+            "DOMAIN-KEYWORD,wechat,DIRECT",
+            "DOMAIN-KEYWORD,weixin,DIRECT",
+            "GEOSITE,wechat,DIRECT",
 
             // Геолокационные справочники Clash/Mihomo
             "GEOSITE,category-ru,DIRECT",
