@@ -71,8 +71,8 @@ flowchart TD
     end
 
     subgraph Core ["Android VpnService & JNI"]
-        VpnSvc["MulticoreVpnService"]
-        TunBridge["Tun2Socks / Incycore JNI"]
+        VpnSvc["PortalVpnService"]
+        TunBridge["Tun2Socks / Native JNI"]
     end
 
     subgraph DualEngine ["Dual-Core Engine"]
@@ -93,7 +93,8 @@ flowchart TD
 
 | Врата (В портале) | Радар доступности | Выбор портала и пинг |
 | :---: | :---: | :---: |
-| Живая сингулярность, счетчик трафика и статус защиты | Замер реальной задержки до Telegram, YouTube, Instagram, AI | Целевые чипы пинга приложений, сортировка и поиск |
+| <img src="docs/screenshots/gates_connected.png" width="280" alt="Врата (В портале)"/> | <img src="docs/screenshots/service_radar.png" width="280" alt="Радар доступности"/> | <img src="docs/screenshots/portals_catalog.png" width="280" alt="Выбор портала и пинг"/> |
+| *Живая сингулярность, счетчик трафика и статус квантовой защиты* | *Замер реальной задержки сквозь туннель до Telegram, YouTube, Gemini* | *Умный выбор сервиса для пинга, автосортировка и каталог* |
 
 ---
 
@@ -119,9 +120,6 @@ flowchart TD
 ### Сборка через терминал:
 
 ```powershell
-# Переход в директорию Android-проекта
-cd apps/multicore-android
-
 # Сборка Debug APK
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat assembleDebug

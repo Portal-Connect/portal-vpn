@@ -71,8 +71,8 @@ flowchart TD
     end
 
     subgraph Core ["Android VpnService & JNI"]
-        VpnSvc["MulticoreVpnService"]
-        TunBridge["Tun2Socks / Incycore JNI"]
+        VpnSvc["PortalVpnService"]
+        TunBridge["Tun2Socks / Native JNI"]
     end
 
     subgraph DualEngine ["Dual-Core Engine"]
@@ -86,6 +86,15 @@ flowchart TD
     Mihomo <-->|SOCKS Bridge| Xray
     DualEngine ==>|Encrypted Tunnel| Internet(("Open Internet"))
 ```
+
+---
+
+## 📱 Interface Screenshots
+
+| Gates (In Portal) | Service Radar | Portals Catalog & Ping |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/gates_connected.png" width="280" alt="Gates (In Portal)"/> | <img src="docs/screenshots/service_radar.png" width="280" alt="Service Radar"/> | <img src="docs/screenshots/portals_catalog.png" width="280" alt="Portals Catalog & Ping"/> |
+| *Living singularity, traffic counter & quantum shield status* | *End-to-end real delay test to Telegram, YouTube, Gemini* | *Smart target app selection, auto-sorting and catalog* |
 
 ---
 
@@ -111,9 +120,6 @@ flowchart TD
 ### Build via Terminal:
 
 ```powershell
-# Navigate to Android project directory
-cd apps/multicore-android
-
 # Build Debug APK
 $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 .\gradlew.bat assembleDebug
