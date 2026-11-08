@@ -62,13 +62,18 @@ object MihomoManager {
                                         }
                                     }
 
-                                    // Special AI routing guard: If group is AI, ALWAYS route through Finland (🇫🇮 Финляндия).
-                                    // If Finland is unavailable, fallback to Germany or Netherlands.
-                                    val isAiGroup = groupKey.equals("AI", ignoreCase = true) || 
-                                                    groupKey.equals("ChatGPT", ignoreCase = true) ||
-                                                    groupKey.equals("OpenAI", ignoreCase = true)
+                                    // Special AI & Gemini routing guard:
+                                    // The subscription contains two groups: "AI" and "Google / Youtube / Gemini".
+                                    // To make Gemini always work without country restrictions, both "AI" and "Google / Youtube / Gemini"
+                                    // MUST route through a country where Gemini and Google AI are fully supported:
+                                    // Finland (🇫🇮 Финляндия) -> fallback to Germany (🇩🇪 Германия) -> Netherlands (🇳🇱 Нидерланды).
+                                    val isAiOrGoogleGroup = groupKey.equals("AI", ignoreCase = true) || 
+                                                            groupKey.equals("ChatGPT", ignoreCase = true) ||
+                                                            groupKey.equals("OpenAI", ignoreCase = true) ||
+                                                            groupKey.contains("Gemini", ignoreCase = true) ||
+                                                            groupKey.contains("Google", ignoreCase = true)
 
-                                    val effectiveTarget = if (isAiGroup) {
+                                    val effectiveTarget = if (isAiOrGoogleGroup) {
                                         allList.firstOrNull { it.contains("Финляндия", ignoreCase = true) }
                                             ?: allList.firstOrNull { it.contains("Германия", ignoreCase = true) }
                                             ?: allList.firstOrNull { it.contains("Нидерланды", ignoreCase = true) }
@@ -99,8 +104,11 @@ object MihomoManager {
                         "WhatsApp / IG / FB", "Spotify", "Discord"
                     )
                     for (group in groupNames) {
-                        val isAiGroup = group.equals("AI", ignoreCase = true) || group.equals("ChatGPT", ignoreCase = true)
-                        val target = if (isAiGroup) {
+                        val isAiOrGoogleGroup = group.equals("AI", ignoreCase = true) || 
+                                                group.equals("ChatGPT", ignoreCase = true) ||
+                                                group.contains("Gemini", ignoreCase = true) ||
+                                                group.contains("Google", ignoreCase = true)
+                        val target = if (isAiOrGoogleGroup) {
                             "🇫🇮 Финляндия"
                         } else {
                             nodeName
@@ -117,7 +125,9 @@ object MihomoManager {
 
     private fun putProxySelection(groupName: String, targetNode: String) {
         try {
-            val encodedGroup = URLEncoder.encode(groupName, "UTF-8").replace("+", "%20")
+            val encodedGroup = URLEncoder.encode(groupName, "UTF-8")
+                .replace("+", "%20")
+                .replace("%2F", "%2F") // Keep %2F encoded!
             val url = URL("http://127.0.0.1:9090/proxies/$encodedGroup")
             val conn = url.openConnection() as HttpURLConnection
             conn.requestMethod = "PUT"

@@ -440,7 +440,12 @@ class MainActivity : ComponentActivity() {
         TrafficStatsManager.resetSession()
         ipCheckResult = IpCheckResult(ip = "", country = "Активация портала...")
         lifecycleScope.launch {
-            delay(1800)
+            // Apply selected proxy node (and AI/Gemini Finland routing) once core boots
+            delay(1500)
+            if (selectedRoute.isNotBlank()) {
+                MihomoManager.selectProxyNode(selectedRoute)
+            }
+            delay(1000)
             triggerIpCheck()
             triggerRadarScan()
         }
