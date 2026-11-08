@@ -116,6 +116,80 @@ object ServiceRadarManager {
         )
     )
 
+    data class SpeedTestResult(
+        val speedMbps: Double = 0.0,
+        val durationMs: Long = 0,
+        val bytesDownloaded: Long = 0,
+        val isSuccess: Boolean = false,
+        val errorMessage: String = ""
+    )
+
+    /**
+     * Measures real download speed (Mbps) through the active portal tunnel
+     * by streaming a 5MB payload from Cloudflare CDN.
+     */
+    suspend fun measureDownloadSpeedMbps(
+        useProxyOverride: Boolean? = null,
+        onProgress: ((Double) -> Unit)? = null
+    ): SpeedTestResult = withContext(Dispatchers.IO) {
+        val useProxy = useProxyOverride ?: (PortalVpnService.isRunning || isProxyListening())
+        val client = buildClient(useProxy)
+        // 5 megabytes CDN payload
+        val testUrl = "https://speed.cloudflare.com/__down?bytes=5000000"
+        val startTime = System.currentTimeMillis()
+        var totalBytesRead = 0L
+
+        try {
+            val request = Request.Builder()
+                .url(testUrl)
+                .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:120.0)")
+                .header("Cache-Control", "no-cache")
+                .build()
+
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    return@withContext SpeedTestResult(
+                        isSuccess = false,
+                        errorMessage = "HTTP ${response.code}"
+                    )
+                }
+
+                val body = response.body ?: return@withContext SpeedTestResult(
+                    isSuccess = false,
+                    errorMessage = "Пустое тело ответа"
+                )
+
+                val buffer = ByteArray(32768)
+                val inputStream = body.byteStream()
+                var read: Int
+
+                while (inputStream.read(buffer).also { read = it } != -1) {
+                    totalBytesRead += read
+                    val currentElapsed = (System.currentTimeMillis() - startTime).coerceAtLeast(1)
+                    val currentMbps = (totalBytesRead * 8.0) / (currentElapsed / 1000.0) / 1_000_000.0
+                    onProgress?.invoke(String.format(java.util.Locale.US, "%.1f", currentMbps).toDoubleOrNull() ?: currentMbps)
+                }
+            }
+
+            val totalDuration = (System.currentTimeMillis() - startTime).coerceAtLeast(1)
+            val mbps = (totalBytesRead * 8.0) / (totalDuration / 1000.0) / 1_000_000.0
+            val formattedMbps = (Math.round(mbps * 10.0) / 10.0)
+
+            SpeedTestResult(
+                speedMbps = formattedMbps,
+                durationMs = totalDuration,
+                bytesDownloaded = totalBytesRead,
+                isSuccess = true
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Speedtest failed: ${e.message}")
+            SpeedTestResult(
+                isSuccess = false,
+                errorMessage = e.message ?: "Ошибка замера скорости"
+            )
+        }
+    }
+
     private fun isProxyListening(): Boolean {
         return try {
             Socket().use { s ->

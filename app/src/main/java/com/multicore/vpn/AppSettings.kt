@@ -31,6 +31,12 @@ enum class AppInterfaceMode(val title: String, val description: String) {
     MULTI_PORTAL("Множество Порталов", "Режим эксперта: ручной выбор стран, радар сервисов, детальные настройки")
 }
 
+enum class AutopilotPriority(val title: String, val icon: String, val description: String) {
+    MIN_PING("Пинг", "🎮", "Минимальная задержка для звонков и игр"),
+    MAX_SPEED("Скорость", "🎬", "Максимальная пропускная способность для 4K видео"),
+    MAX_PRIVACY("Защита", "🛡️", "Максимальная маскировка и нейтральные юрисдикции")
+}
+
 class AppSettings(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("multicore_settings", Context.MODE_PRIVATE)
 
@@ -135,4 +141,19 @@ class AppSettings(context: Context) {
     var bypassRussianServices: Boolean
         get() = prefs.getBoolean(KEY_BYPASS_RU_SERVICES, true)
         set(value) = prefs.edit().putBoolean(KEY_BYPASS_RU_SERVICES, value).apply()
+
+    var autopilotPriority: AutopilotPriority
+        get() {
+            val name = prefs.getString("autopilot_priority", AutopilotPriority.MIN_PING.name)
+            return try {
+                AutopilotPriority.valueOf(name ?: AutopilotPriority.MIN_PING.name)
+            } catch (e: Exception) {
+                AutopilotPriority.MIN_PING
+            }
+        }
+        set(value) = prefs.edit().putString("autopilot_priority", value.name).apply()
+
+    var hapticFeedbackEnabled: Boolean
+        get() = prefs.getBoolean("haptic_feedback", true)
+        set(value) = prefs.edit().putBoolean("haptic_feedback", value).apply()
 }

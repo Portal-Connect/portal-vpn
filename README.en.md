@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android%209.0+--15-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 9.0 - 15">
+  <img src="https://img.shields.io/badge/Platform-Android%209.0+--17-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 9.0 - 17">
   <img src="https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose M3">
   <img src="https://img.shields.io/badge/Dual--Core-Xray%20%2B%20Mihomo-FF6F00?style=for-the-badge" alt="Dual-Core">
   <img src="https://img.shields.io/badge/Language-Kotlin%20100%25-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin">
@@ -75,6 +75,18 @@ The project has completely evolved into a native, high-performance **Android cli
     - Seamless real-time release check directly inside the application.
     - Download and in-place upgrade with progress feedback.
     - Unified release signing (`portal-release.jks`) prevents package signature conflicts.
+
+12. **Tactile Haptic Feedback & Android 17 Ready**
+    - Physical tactile feedback on every interaction: portal connection, node switching, radar pings, and error alerts.
+    - Full backward and forward compatibility spanning from Android 9 (API 28) up to **Android 17 (API 37)** with graceful fallback through `VibratorManager` and `VibrationEffect`.
+
+13. **Seamless Network Handover (Wi-Fi ↔ LTE) & Interactive Notifications**
+    - Dynamic `ConnectivityManager.NetworkCallback` with real-time `setUnderlyingNetworks` keeps connections alive when switching networks.
+    - Interactive system notification with quick actions to switch to the next responsive portal or disconnect with one tap.
+
+14. **Real Speedtest in Service Radar & Autopilot Priorities**
+    - Live download speedtest (Mbps) via Cloudflare CDN integrated into the Service Radar.
+    - Autopilot optimization presets: **🎮 Low Ping** (gaming and VoIP), **🎬 Max Speed** (4K streaming), and **🛡️ Privacy First** (neutral jurisdictions).
 
 ---
 

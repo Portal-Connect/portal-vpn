@@ -88,9 +88,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.multicore.vpn.AppInterfaceMode
 import com.multicore.vpn.AppSettings
+import com.multicore.vpn.AutopilotPriority
+import com.multicore.vpn.HapticFeedbackManager
 import com.multicore.vpn.IpCheckResult
 import com.multicore.vpn.PingTargetService
 import com.multicore.vpn.ServiceCheckResult
+import com.multicore.vpn.ServiceRadarManager
 import com.multicore.vpn.TrafficStatsData
 import com.multicore.vpn.UpdateInfo
 
@@ -123,6 +126,10 @@ fun MainScreen(
     onOpenSplitTunneling: () -> Unit,
     onToggleFavorite: (String) -> Unit,
     onStartRadarScan: () -> Unit,
+    speedTestResult: ServiceRadarManager.SpeedTestResult? = null,
+    isTestingSpeed: Boolean = false,
+    speedProgressMbps: Double = 0.0,
+    onStartSpeedTest: () -> Unit = {},
     updateInfo: UpdateInfo? = null,
     isDownloadingUpdate: Boolean = false,
     updateDownloadProgress: Int = 0,
@@ -132,6 +139,7 @@ fun MainScreen(
     onStartUpdateDownload: () -> Unit = {},
     onDismissUpdateDialog: () -> Unit = {}
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val isSinglePortalMode = (interfaceMode == AppInterfaceMode.SINGLE_PORTAL)
     var selectedTab by remember { mutableStateOf(NavigationTab.HOME) }
     var showAddPortalDialog by remember { mutableStateOf(false) }
@@ -333,6 +341,8 @@ fun MainScreen(
                         trafficData = trafficData,
                         speedHistory = speedHistory,
                         isSinglePortalMode = isSinglePortalMode,
+                        settings = settings,
+                        onSettingsChanged = onSettingsChanged,
                         onToggleConnection = {
                             if (availableRoutes.isEmpty()) {
                                 showAddPortalDialog = true
@@ -364,7 +374,11 @@ fun MainScreen(
                         isConnected = isConnected,
                         radarResults = radarResults,
                         isScanning = isRadarScanning,
-                        onStartScan = onStartRadarScan
+                        onStartScan = onStartRadarScan,
+                        speedTestResult = speedTestResult,
+                        isTestingSpeed = isTestingSpeed,
+                        speedProgressMbps = speedProgressMbps,
+                        onStartSpeedTest = onStartSpeedTest
                     )
                 }
                 NavigationTab.SETTINGS -> {
@@ -569,6 +583,7 @@ fun MainScreen(
                                             .fillMaxWidth()
                                             .clip(RoundedCornerShape(8.dp))
                                             .clickable {
+                                                HapticFeedbackManager.nodeSelected(context)
                                                 onSelectRoute(route)
                                                 onDismissBottomSheet()
                                             }
@@ -704,6 +719,7 @@ fun PortalGatewayButton(
     val primaryColor = MaterialTheme.colorScheme.primary
     val secondaryColor = if (isConnected) connectedCyan else Color(0xFFA855F7)
     val auraColor = if (isConnected) connectedGreen else primaryColor
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Box(
         modifier = modifier
@@ -711,7 +727,10 @@ fun PortalGatewayButton(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null
-            ) { onClick() },
+            ) {
+                HapticFeedbackManager.portalClick(context)
+                onClick()
+            },
         contentAlignment = Alignment.Center
     ) {
         // 1. Outermost Hyperspace Aura (Pulsing Glow)
@@ -899,12 +918,15 @@ fun HomeTabContent(
     trafficData: TrafficStatsData,
     speedHistory: List<Float>,
     isSinglePortalMode: Boolean = false,
+    settings: AppSettings? = null,
+    onSettingsChanged: (() -> Unit)? = null,
     onToggleConnection: () -> Unit,
     onOpenBottomSheet: () -> Unit,
     onImportSubscription: (String) -> Unit,
     onOpenQrScanner: () -> Unit
 ) {
     val scrollState = rememberScrollState()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(
         modifier = Modifier
@@ -1055,47 +1077,98 @@ fun HomeTabContent(
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.35f))
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color(0xFF00E5FF).copy(alpha = 0.15f))
-                                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(0xFF00E5FF).copy(alpha = 0.15f))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "⚡️ АВТОПИЛОТ",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Black,
+                                            color = Color(0xFF00E5FF)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "⚡️ АВТОПИЛОТ",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Black,
-                                        color = Color(0xFF00E5FF)
+                                        text = "Оптимальный узел • Авто-подбор",
+                                        fontSize = 11.sp,
+                                        color = Color.Gray
                                     )
                                 }
-                                Spacer(modifier = Modifier.width(6.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Оптимальный узел • Авто-подбор",
-                                    fontSize = 11.sp,
-                                    color = Color.Gray
+                                    text = selectedRoute.ifBlank { "Авто-выбор при подключении" },
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = selectedRoute.ifBlank { "Авто-выбор при подключении" },
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
+                            val ping = pingsMap[selectedRoute] ?: -1
+                            PingBadge(pingMs = ping)
                         }
-                        val ping = pingsMap[selectedRoute] ?: -1
-                        PingBadge(pingMs = ping)
+
+                        if (settings != null) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Приоритет автопилота:",
+                                fontSize = 11.sp,
+                                color = Color.Gray,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                AutopilotPriority.entries.forEach { priority ->
+                                    val isSelected = (settings.autopilotPriority == priority)
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(
+                                                if (isSelected) Color(0xFF00E5FF).copy(alpha = 0.2f)
+                                                else MaterialTheme.colorScheme.surfaceVariant
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (isSelected) Color(0xFF00E5FF) else Color.Transparent,
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable {
+                                                HapticFeedbackManager.nodeSelected(context)
+                                                settings.autopilotPriority = priority
+                                                onSettingsChanged?.invoke()
+                                            }
+                                            .padding(vertical = 8.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(text = priority.icon, fontSize = 13.sp)
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = priority.title,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                color = if (isSelected) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             } else {

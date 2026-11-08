@@ -42,6 +42,9 @@ class MainActivity : ComponentActivity() {
     private val pingsMap = mutableStateMapOf<String, Int>()
     private var radarResults by mutableStateOf<Map<String, ServiceCheckResult>>(emptyMap())
     private var isRadarScanning by mutableStateOf(false)
+    private var speedTestResult by mutableStateOf<ServiceRadarManager.SpeedTestResult?>(null)
+    private var isTestingSpeed by mutableStateOf(false)
+    private var speedProgressMbps by mutableStateOf(0.0)
 
     // Update state
     private var updateInfo by mutableStateOf<UpdateInfo?>(null)
@@ -175,7 +178,7 @@ class MainActivity : ComponentActivity() {
                                 stopVpnService()
                             } else {
                                 if (currentInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
-                                    val bestRoute = selectBestAutoPilotRoute(availableRoutes, pingsMap)
+                                    val bestRoute = selectBestAutoPilotRoute(availableRoutes, pingsMap, settings.autopilotPriority)
                                     if (bestRoute != null && bestRoute != selectedRoute) {
                                         PortalCoreJni.setSelectedRoute(bestRoute)
                                         selectedRoute = bestRoute
@@ -245,6 +248,12 @@ class MainActivity : ComponentActivity() {
                         },
                         onStartRadarScan = {
                             triggerRadarScan()
+                        },
+                        speedTestResult = speedTestResult,
+                        isTestingSpeed = isTestingSpeed,
+                        speedProgressMbps = speedProgressMbps,
+                        onStartSpeedTest = {
+                            triggerSpeedTest()
                         }
                     )
                 }
@@ -264,7 +273,7 @@ class MainActivity : ComponentActivity() {
                                selectedRoute.contains("Обход", ignoreCase = true) || 
                                selectedRoute.contains("Эстония", ignoreCase = true)
             if (isRestricted) {
-                val best = selectBestAutoPilotRoute(availableRoutes, pingsMap)
+                val best = selectBestAutoPilotRoute(availableRoutes, pingsMap, settings.autopilotPriority)
                 if (best != null && best != selectedRoute) {
                     PortalCoreJni.setSelectedRoute(best)
                     selectedRoute = best
@@ -280,16 +289,58 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        fun selectBestAutoPilotRoute(availableRoutes: List<String>, pings: Map<String, Int>): String? {
-            // 1. Pick lowest ping route excluding known problematic restricted nodes
+        fun selectBestAutoPilotRoute(
+            availableRoutes: List<String>,
+            pings: Map<String, Int>,
+            priority: AutopilotPriority = AutopilotPriority.MIN_PING
+        ): String? {
+            // Filter candidates excluding restricted/broken regions
             val nonRestricted = availableRoutes.filter { route ->
                 !route.contains("Россия", ignoreCase = true) &&
                 !route.contains("Обход", ignoreCase = true) &&
-                !route.contains("Эстония", ignoreCase = true) &&
-                (pings[route] ?: 0) > 0
+                !route.contains("Эстония", ignoreCase = true)
             }
-            if (nonRestricted.isNotEmpty()) {
-                return nonRestricted.minByOrNull { pings[it] ?: 9999 }
+
+            when (priority) {
+                AutopilotPriority.MAX_PRIVACY -> {
+                    // Prefer privacy-focused neutral jurisdictions: Switzerland, Iceland, Sweden, Netherlands, Finland
+                    val privacyNodes = nonRestricted.filter { route ->
+                        route.contains("Швейцария", ignoreCase = true) ||
+                        route.contains("Исландия", ignoreCase = true) ||
+                        route.contains("Швеция", ignoreCase = true) ||
+                        route.contains("Нидерланды", ignoreCase = true) ||
+                        route.contains("Финляндия", ignoreCase = true)
+                    }
+                    val validPing = privacyNodes.filter { (pings[it] ?: 0) > 0 }
+                    if (validPing.isNotEmpty()) {
+                        return validPing.minByOrNull { pings[it] ?: 9999 }
+                    }
+                    if (privacyNodes.isNotEmpty()) {
+                        return privacyNodes.first()
+                    }
+                }
+                AutopilotPriority.MAX_SPEED -> {
+                    // High-bandwidth Tier-1 nodes: Germany, Netherlands, Finland, Poland
+                    val highBandwidthNodes = nonRestricted.filter { route ->
+                        route.contains("Германия", ignoreCase = true) ||
+                        route.contains("Нидерланды", ignoreCase = true) ||
+                        route.contains("Финляндия", ignoreCase = true) ||
+                        route.contains("Польша", ignoreCase = true)
+                    }
+                    val validPing = highBandwidthNodes.filter { (pings[it] ?: 0) > 0 }
+                    if (validPing.isNotEmpty()) {
+                        return validPing.minByOrNull { pings[it] ?: 9999 }
+                    }
+                }
+                AutopilotPriority.MIN_PING -> {
+                    // Default lowest latency
+                }
+            }
+
+            // 1. Pick lowest ping route excluding known problematic restricted nodes
+            val validNonRestricted = nonRestricted.filter { (pings[it] ?: 0) > 0 }
+            if (validNonRestricted.isNotEmpty()) {
+                return validNonRestricted.minByOrNull { pings[it] ?: 9999 }
             }
 
             // 2. Any working route with valid ping
@@ -422,6 +473,29 @@ class MainActivity : ComponentActivity() {
             val results = ServiceRadarManager.checkAllServices()
             radarResults = results
             isRadarScanning = false
+            if (settings.hapticFeedbackEnabled) {
+                HapticFeedbackManager.radarPing(this@MainActivity)
+            }
+        }
+    }
+
+    private fun triggerSpeedTest() {
+        if (isTestingSpeed) return
+        isTestingSpeed = true
+        speedProgressMbps = 0.0
+        lifecycleScope.launch {
+            val result = ServiceRadarManager.measureDownloadSpeedMbps { progress ->
+                speedProgressMbps = progress
+            }
+            speedTestResult = result
+            isTestingSpeed = false
+            if (settings.hapticFeedbackEnabled) {
+                if (result.isSuccess) {
+                    HapticFeedbackManager.portalConnected(this@MainActivity)
+                } else {
+                    HapticFeedbackManager.error(this@MainActivity)
+                }
+            }
         }
     }
 

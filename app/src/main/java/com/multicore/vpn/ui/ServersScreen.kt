@@ -50,12 +50,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.multicore.vpn.AppSettings
+import com.multicore.vpn.HapticFeedbackManager
 import com.multicore.vpn.PingTargetService
 
 @Composable
@@ -96,6 +98,7 @@ fun ServersScreen(
     onToggleFavorite: (String) -> Unit,
     onAddPortalClick: () -> Unit
 ) {
+    val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
     var sortByPing by remember { mutableStateOf(false) }
 
@@ -337,7 +340,10 @@ fun ServersScreen(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSelectRoute(route) },
+                            .clickable {
+                                HapticFeedbackManager.nodeSelected(context)
+                                onSelectRoute(route)
+                            },
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(
                             containerColor = if (isSelected) {

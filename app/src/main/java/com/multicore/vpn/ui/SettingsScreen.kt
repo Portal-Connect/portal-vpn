@@ -74,6 +74,7 @@ fun SettingsScreen(
     var killSwitch by remember { mutableStateOf(settings.killSwitch) }
     var autoFailover by remember { mutableStateOf(settings.autoFailoverEnabled) }
     var bypassRussianServices by remember { mutableStateOf(settings.bypassRussianServices) }
+    var hapticFeedback by remember { mutableStateOf(settings.hapticFeedbackEnabled) }
 
     val scrollState = rememberScrollState()
 
@@ -486,6 +487,35 @@ fun SettingsScreen(
                         onCheckedChange = {
                             autoFailover = it
                             settings.autoFailoverEnabled = it
+                            onSettingsChanged()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Тактильный виброотклик (Haptic Feedback)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Приятная тактильная вибрация при входе в портал, переключении узлов и в радаре",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    Switch(
+                        checked = hapticFeedback,
+                        onCheckedChange = {
+                            hapticFeedback = it
+                            settings.hapticFeedbackEnabled = it
                             onSettingsChanged()
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)

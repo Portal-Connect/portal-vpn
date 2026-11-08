@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Radar
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -58,7 +59,11 @@ fun RadarScreen(
     isConnected: Boolean,
     radarResults: Map<String, ServiceCheckResult>,
     isScanning: Boolean,
-    onStartScan: () -> Unit
+    onStartScan: () -> Unit,
+    speedTestResult: ServiceRadarManager.SpeedTestResult? = null,
+    isTestingSpeed: Boolean = false,
+    speedProgressMbps: Double = 0.0,
+    onStartSpeedTest: () -> Unit = {}
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "radarRotation")
     val rotation by infiniteTransition.animateFloat(
@@ -158,6 +163,77 @@ fun RadarScreen(
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Сканировать доступность миров", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Real Speedtest Card
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(Color(0xFF00E5FF).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = "Скорость",
+                                    tint = Color(0xFF00E5FF),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (isTestingSpeed) "Замер скорости..." else "Тест скорости портала",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = when {
+                                        isTestingSpeed -> "${String.format(java.util.Locale.US, "%.1f", speedProgressMbps)} Мбит/с..."
+                                        speedTestResult?.isSuccess == true -> "${speedTestResult.speedMbps} Мбит/с (реальная загрузка)"
+                                        speedTestResult?.errorMessage?.isNotBlank() == true -> speedTestResult.errorMessage
+                                        else -> "CDN Cloudflare (5 MB)"
+                                    },
+                                    fontSize = 11.sp,
+                                    color = if (speedTestResult?.isSuccess == true) Color(0xFF00F5A0) else Color.Gray
+                                )
+                            }
+                        }
+
+                        Button(
+                            onClick = onStartSpeedTest,
+                            enabled = !isTestingSpeed,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF00E5FF)),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            if (isTestingSpeed) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.Black
+                                )
+                            } else {
+                                Text("Тест", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.Black)
+                            }
+                        }
                     }
                 }
             }

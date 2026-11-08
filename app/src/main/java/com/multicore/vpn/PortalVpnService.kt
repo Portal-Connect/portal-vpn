@@ -6,7 +6,10 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.net.ProxyInfo
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -26,6 +29,7 @@ class PortalVpnService : VpnService() {
         const val TAG = "PortalVpnService"
         const val ACTION_START_VPN = "com.multicore.vpn.START_VPN"
         const val ACTION_STOP_VPN = "com.multicore.vpn.STOP_VPN"
+        const val ACTION_NEXT_PORTAL = "com.multicore.vpn.NEXT_PORTAL"
         const val CHANNEL_ID = "portal_vpn_channel"
         const val NOTIFICATION_ID = 1001
 
@@ -56,6 +60,7 @@ class PortalVpnService : VpnService() {
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
@@ -70,13 +75,26 @@ class PortalVpnService : VpnService() {
 
         when (action) {
             ACTION_START_VPN -> {
-                startForeground(NOTIFICATION_ID, buildNotification("🌀 В ПОРТАЛЕ", "Квантовый щит активен • Трафик защищён"))
+                val route = PortalCoreJni.getSelectedRoute().ifBlank { "Авто-подбор" }
+                startForeground(NOTIFICATION_ID, buildNotification("🌀 В ПОРТАЛЕ", "Узел: $route • Квантовый щит активен"))
                 startVpnSession()
             }
             ACTION_STOP_VPN -> {
                 stopVpnSession()
                 stopForeground(true)
                 stopSelf()
+            }
+            ACTION_NEXT_PORTAL -> {
+                serviceScope.launch {
+                    val switched = PortalFailoverWatchdog.performHealthCheckAndFailover(this@PortalVpnService, forceFailoverIfDown = true)
+                    val currentRoute = PortalCoreJni.getSelectedRoute().ifBlank { "Резервный узел" }
+                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+                    notificationManager?.notify(
+                        NOTIFICATION_ID,
+                        buildNotification("🌀 В ПОРТАЛЕ", "Узел: $currentRoute • Переключен без разрыва")
+                    )
+                    HapticFeedbackManager.nodeSelected(this@PortalVpnService)
+                }
             }
         }
         return START_STICKY
@@ -92,7 +110,6 @@ class PortalVpnService : VpnService() {
             try {
                 val settings = AppSettings(this@PortalVpnService)
                 val subUrl = settings.lastSubscriptionUrl.ifBlank {
-                    // Fallback to demo/default if not set
                     "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt"
                 }
 
@@ -104,7 +121,7 @@ class PortalVpnService : VpnService() {
                     .addAddress("198.18.0.2", 30)
                     .addDnsServer("198.18.0.1")
                     .addDnsServer("77.88.8.8")
-                    .addRoute("0.0.0.0", 0) // Route all IPv4 traffic through VPN
+                    .addRoute("0.0.0.0", 0)
                     .setMtu(1500)
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -131,27 +148,25 @@ class PortalVpnService : VpnService() {
                         }
                     }
 
-                    // Apply automatic OS-level bypass for Russian banks, Gosuslugi, VK, Yandex, marketplaces
                     if (settings.bypassRussianServices) {
                         RussianBypassManager.applyOsAppBypass(builder)
                     }
                 }
 
-                // Disallow self to prevent proxy loop
                 try {
                     builder.addDisallowedApplication(packageName)
                 } catch (e: Exception) {
                     Log.w(TAG, "Could not add disallowed self package", e)
                 }
 
-                // Set underlying physical network for VPN routing
-                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+                // Register network callback for seamless Wi-Fi <-> Cellular handover
+                registerNetworkCallback()
+
+                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
                 val activeNetwork = cm?.activeNetwork
-                if (activeNetwork != null) {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                        setUnderlyingNetworks(arrayOf(activeNetwork))
-                        Log.i(TAG, "Set VPN underlying network: $activeNetwork")
-                    }
+                if (activeNetwork != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                    setUnderlyingNetworks(arrayOf(activeNetwork))
+                    Log.i(TAG, "Set initial underlying network: $activeNetwork")
                 }
 
                 val pfd = builder.establish()
@@ -162,7 +177,6 @@ class PortalVpnService : VpnService() {
                 }
                 vpnInterface = pfd
 
-                // Clear FD_CLOEXEC so child process libmihomo can inherit this TUN fd
                 val tunFd = pfd.fd
                 try {
                     Os.fcntlInt(pfd.fileDescriptor, OsConstants.F_SETFD, 0)
@@ -171,11 +185,8 @@ class PortalVpnService : VpnService() {
                     Log.w(TAG, "Failed to clear FD_CLOEXEC on TUN fd", e)
                 }
 
-                // Start proxy engines
                 SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
                 MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
-
-                // Start in-process native L3 tun2socks router for Telegram and all apps
                 Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
 
                 serviceScope.launch {
@@ -187,7 +198,8 @@ class PortalVpnService : VpnService() {
                 TrafficStatsManager.resetSession()
                 VpnWidgetProvider.notifyWidgetUpdate(this@PortalVpnService)
                 PortalFailoverWatchdog.start(this@PortalVpnService)
-                Log.i(TAG, "Portal VPN Service started successfully (Xray + Mihomo) with Failover Watchdog")
+                HapticFeedbackManager.portalConnected(this@PortalVpnService)
+                Log.i(TAG, "Portal VPN Service started successfully with Network Handover and Failover Watchdog")
             } catch (e: Exception) {
                 Log.e(TAG, "Error starting VPN session", e)
                 stopVpnSession()
@@ -195,9 +207,58 @@ class PortalVpnService : VpnService() {
         }
     }
 
+    private fun registerNetworkCallback() {
+        unregisterNetworkCallback()
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                super.onAvailable(network)
+                Log.i(TAG, "Network became available: $network")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                    setUnderlyingNetworks(arrayOf(network))
+                }
+            }
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                super.onCapabilitiesChanged(network, networkCapabilities)
+                val isWifi = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                val isCellular = networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                Log.i(TAG, "Network transport changed (WiFi: $isWifi, LTE: $isCellular) on $network")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                    setUnderlyingNetworks(arrayOf(network))
+                }
+            }
+
+            override fun onLost(network: Network) {
+                super.onLost(network)
+                Log.w(TAG, "Underlying network lost: $network")
+            }
+        }
+
+        try {
+            cm.registerNetworkCallback(request, networkCallback!!)
+            Log.i(TAG, "Registered NetworkCallback for seamless network switching")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not register NetworkCallback: ${e.message}")
+        }
+    }
+
+    private fun unregisterNetworkCallback() {
+        try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            networkCallback?.let { cm?.unregisterNetworkCallback(it) }
+            networkCallback = null
+        } catch (_: Exception) {}
+    }
+
     private fun stopVpnSession() {
         Log.i(TAG, "Stopping Dual-Core VPN session")
         isRunning = false
+        unregisterNetworkCallback()
         PortalFailoverWatchdog.stop()
         Tun2SocksManager.stop()
         SingBoxManager.stopSingBox()
@@ -211,6 +272,7 @@ class PortalVpnService : VpnService() {
         vpnInterface = null
         TrafficStatsManager.resetSession()
         VpnWidgetProvider.notifyWidgetUpdate(this)
+        HapticFeedbackManager.portalDisconnected(this)
     }
 
     override fun onDestroy() {
@@ -251,14 +313,24 @@ class PortalVpnService : VpnService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val switchIntent = Intent(this, PortalVpnService::class.java).apply {
+            action = ACTION_NEXT_PORTAL
+        }
+        val switchPendingIntent = PendingIntent.getService(
+            this, 2, switchIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(content)
             .setSmallIcon(R.drawable.ic_stat_portal)
             .setContentIntent(pendingIntent)
-            .addAction(R.drawable.ic_stat_portal, "Разорвать портал", stopPendingIntent)
+            .addAction(R.drawable.ic_stat_portal, "Сменить портал", switchPendingIntent)
+            .addAction(R.drawable.ic_stat_portal, "Отключить", stopPendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOnlyAlertOnce(true)
             .build()
     }
 }

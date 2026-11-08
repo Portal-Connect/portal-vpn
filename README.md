@@ -7,7 +7,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android%209.0+--15-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 9.0 - 15">
+  <img src="https://img.shields.io/badge/Platform-Android%209.0+--17-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Android 9.0 - 17">
   <img src="https://img.shields.io/badge/UI-Jetpack%20Compose%20M3-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white" alt="Jetpack Compose M3">
   <img src="https://img.shields.io/badge/Dual--Core-Xray%20%2B%20Mihomo-FF6F00?style=for-the-badge" alt="Dual-Core">
   <img src="https://img.shields.io/badge/Language-Kotlin%20100%25-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white" alt="Kotlin">
@@ -75,6 +75,18 @@
     - Проверка наличия свежих релизов прямо в приложении при каждом запуске и в Настройках.
     - Загрузка и бесшовная установка APK в один клик без перехода в браузер.
     - Унифицированная подпись сборок (`portal-release.jks`) гарантирует чистую установку обновлений без «конфликта пакетов».
+
+12. **Тактильный виброотклик (Haptic Feedback) & Android 17 Ready**
+    - Физический отклик устройства на каждое действие: вход в квантовый портал, переключение узлов, замер пинга в радаре и аварийные сбои.
+    - Полная поддержка всех поколений Android: от Android 9 (API 28) до **Android 17 (API 37)** с адаптивной работой через `VibratorManager` и `VibrationEffect`.
+
+13. **Бесшовный хэндовер сети (Wi-Fi ↔ LTE) и интерактивная шторка**
+    - Динамический `ConnectivityManager.NetworkCallback` с мгновенной регистрацией `setUnderlyingNetworks` предотвращает обрывы соединения при выходе из дома или смене Wi-Fi на мобильную сеть.
+    - Интерактивное системное уведомление в шторке позволяет мгновенно сменить портал на следующий быстрый узел или отключить туннель в одно касание.
+
+14. **Реальный Speedtest в Радаре и профили Автопилота**
+    - Встроенный тест реальной скорости скачивания через CDN Cloudflare (Мбит/с) прямо на экране Радара.
+    - Профили приоритета для режима «Один Портал»: **🎮 Пинг** (для звонков и игр), **🎬 Скорость** (для 4K потокового видео) и **🛡️ Защита** (нейтральные юрисдикции).
 
 ---
 
