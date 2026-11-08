@@ -175,11 +175,7 @@ class MainActivity : ComponentActivity() {
                                 stopVpnService()
                             } else {
                                 if (currentInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
-                                    val bestRoute = availableRoutes
-                                        .filter { (pingsMap[it] ?: 0) > 0 }
-                                        .minByOrNull { pingsMap[it] ?: 9999 }
-                                        ?: availableRoutes.firstOrNull()
-
+                                    val bestRoute = selectBestAutoPilotRoute(availableRoutes, pingsMap)
                                     if (bestRoute != null && bestRoute != selectedRoute) {
                                         PortalCoreJni.setSelectedRoute(bestRoute)
                                         selectedRoute = bestRoute
@@ -262,10 +258,67 @@ class MainActivity : ComponentActivity() {
         currentInterfaceMode = settings.appInterfaceMode
         refreshRoutes()
         selectedRoute = PortalCoreJni.getSelectedRoute()
+        if (currentInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
+            val needsBetterRoute = selectedRoute.isBlank() || AI_RESTRICTED_COUNTRIES.any { selectedRoute.contains(it, ignoreCase = true) }
+            if (needsBetterRoute) {
+                val best = selectBestAutoPilotRoute(availableRoutes, pingsMap)
+                if (best != null && best != selectedRoute) {
+                    PortalCoreJni.setSelectedRoute(best)
+                    selectedRoute = best
+                    MihomoManager.selectProxyNode(best)
+                }
+            }
+        }
         themeRecomposeTrigger++
         triggerPingAll()
         if (isConnected) {
             triggerIpCheck()
+        }
+    }
+
+    companion object {
+        val AI_FRIENDLY_COUNTRIES = listOf("Финляндия", "Германия", "Нидерланды", "Швеция", "Швейцария", "Польша", "США")
+        val AI_RESTRICTED_COUNTRIES = listOf("Россия", "Обход", "Эстония")
+
+        fun selectBestAutoPilotRoute(availableRoutes: List<String>, pings: Map<String, Int>): String? {
+            // 1. Highest priority: AI-friendly routes (Finland, Germany, Netherlands, etc.) with valid ping
+            val aiWorking = availableRoutes.filter { route ->
+                AI_FRIENDLY_COUNTRIES.any { route.contains(it, ignoreCase = true) } &&
+                AI_RESTRICTED_COUNTRIES.none { route.contains(it, ignoreCase = true) } &&
+                (pings[route] ?: 0) > 0
+            }
+            if (aiWorking.isNotEmpty()) {
+                return aiWorking.minByOrNull { pings[it] ?: 9999 }
+            }
+
+            // 2. Any non-restricted working route
+            val safeWorking = availableRoutes.filter { route ->
+                AI_RESTRICTED_COUNTRIES.none { route.contains(it, ignoreCase = true) } &&
+                (pings[route] ?: 0) > 0
+            }
+            if (safeWorking.isNotEmpty()) {
+                return safeWorking.minByOrNull { pings[it] ?: 9999 }
+            }
+
+            // 3. Any working route
+            val anyWorking = availableRoutes.filter { (pings[it] ?: 0) > 0 }
+            if (anyWorking.isNotEmpty()) {
+                return anyWorking.minByOrNull { pings[it] ?: 9999 }
+            }
+
+            // 4. Any AI-friendly route even before ping completes
+            val aiFallback = availableRoutes.firstOrNull { route ->
+                AI_FRIENDLY_COUNTRIES.any { route.contains(it, ignoreCase = true) }
+            }
+            if (aiFallback != null) return aiFallback
+
+            // 5. Any safe fallback
+            val safeFallback = availableRoutes.firstOrNull { route ->
+                AI_RESTRICTED_COUNTRIES.none { route.contains(it, ignoreCase = true) }
+            }
+            if (safeFallback != null) return safeFallback
+
+            return availableRoutes.firstOrNull()
         }
     }
 

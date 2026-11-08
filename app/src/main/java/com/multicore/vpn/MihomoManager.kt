@@ -62,8 +62,26 @@ object MihomoManager {
                                         }
                                     }
 
-                                    if (target != null) {
-                                        putProxySelection(groupKey, target)
+                                    // Special AI routing guard: If group is AI or Gemini, and the selected node is
+                                    // in a restricted country (Russia, Estonia, LTE), auto-pick an AI-friendly node (Finland, Germany, etc.)
+                                    val isAiGroup = groupKey.equals("AI", ignoreCase = true) || 
+                                                    groupKey.contains("Gemini", ignoreCase = true) ||
+                                                    groupKey.contains("ChatGPT", ignoreCase = true) ||
+                                                    groupKey.contains("OpenAI", ignoreCase = true)
+                                    val isAiRestricted = nodeName.contains("Россия", ignoreCase = true) || 
+                                                         nodeName.contains("Эстония", ignoreCase = true) || 
+                                                         nodeName.contains("Обход", ignoreCase = true)
+
+                                    val aiFriendlyKeywords = listOf("Финляндия", "Германия", "Нидерланды", "Швеция", "Швейцария", "Польша", "США")
+                                    val effectiveTarget = if (isAiGroup && isAiRestricted) {
+                                        allList.firstOrNull { node -> aiFriendlyKeywords.any { node.contains(it, ignoreCase = true) } }
+                                            ?: target
+                                    } else {
+                                        target
+                                    }
+
+                                    if (effectiveTarget != null) {
+                                        putProxySelection(groupKey, effectiveTarget)
                                     }
                                 }
                             }
@@ -77,13 +95,23 @@ object MihomoManager {
                 }
 
                 if (!queriedGroups) {
+                    val aiFriendlyKeywords = listOf("Финляндия", "Германия", "Нидерланды", "Швеция", "Швейцария", "Польша", "США")
+                    val isAiRestricted = nodeName.contains("Россия", ignoreCase = true) || 
+                                         nodeName.contains("Эстония", ignoreCase = true) || 
+                                         nodeName.contains("Обход", ignoreCase = true)
                     val groupNames = listOf(
                         "VPN - Main", "Всё остальное", "Telegram", "Google / Youtube / Gemini",
                         "PROXY", "GLOBAL", "Proxy", "GLOBAL-PROXY", "Auto", "Select", "AI",
                         "WhatsApp / IG / FB", "Spotify", "Discord"
                     )
                     for (group in groupNames) {
-                        putProxySelection(group, nodeName)
+                        val isAiGroup = group.equals("AI", ignoreCase = true) || group.contains("Gemini", ignoreCase = true)
+                        val target = if (isAiGroup && isAiRestricted) {
+                            "🇫🇮 Финляндия"
+                        } else {
+                            nodeName
+                        }
+                        putProxySelection(group, target)
                     }
                 }
                 try {
@@ -363,6 +391,19 @@ $fakeIpFilters
                 for (domain in proxyDomains) {
                     directRulesBuilder.append("  - DOMAIN-SUFFIX,$domain,DIRECT\n")
                 }
+
+                // Explicit AI rules to ensure Gemini and OpenAI always route through AI / Google group
+                val aiTarget = if (content.contains("name: AI")) "AI" else if (content.contains("name: Google / Youtube / Gemini")) "Google / Youtube / Gemini" else "PROXY"
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,gemini.google.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,bard.google.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,generativelanguage.googleapis.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,alkalimakersuite-pa.clients6.google.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,chatgpt.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,openai.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,oaistatic.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,oaiusercontent.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-KEYWORD,gemini,$aiTarget\n")
+
                 val settings = AppSettings(context)
                 if (settings.bypassRussianServices) {
                     // Route Telegram through proxy group first, before general RU bypass rules
