@@ -15,11 +15,11 @@
         android:name="android.hardware.camera"
         android:required="false"/>
     <permission
-        android:name="com.multicore.vpn.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:name="io.portal.vpn.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         android:protectionLevel="signature"/>
-    <uses-permission android:name="com.multicore.vpn.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/>
+    <uses-permission android:name="io.portal.vpn.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/>
     <application
-        android:theme="@style/Theme.Multicore"
+        android:theme="@style/Theme.Portal"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="true"
@@ -36,9 +36,9 @@
                 android:resource="@xml/file_paths" />
         </provider>
         <activity
-            android:theme="@style/Theme.Multicore"
+            android:theme="@style/Theme.Portal"
             android:label="@string/app_name"
-            android:name="com.multicore.vpn.MainActivity"
+            android:name="io.portal.vpn.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
@@ -46,16 +46,16 @@
             </intent-filter>
         </activity>
         <activity
-            android:theme="@style/Theme.Multicore"
-            android:name="com.multicore.vpn.QrScannerActivity"
+            android:theme="@style/Theme.Portal"
+            android:name="io.portal.vpn.QrScannerActivity"
             android:exported="false"/>
         <activity
-            android:theme="@style/Theme.Multicore"
+            android:theme="@style/Theme.Portal"
             android:label="Раздельное тоннелирование"
-            android:name="com.multicore.vpn.ui.AppSplitTunnelingActivity"
+            android:name="io.portal.vpn.ui.AppSplitTunnelingActivity"
             android:exported="true"/>
         <service
-            android:name="com.multicore.vpn.PortalVpnService"
+            android:name="io.portal.vpn.PortalVpnService"
             android:permission="android.permission.BIND_VPN_SERVICE"
             android:exported="false"
             android:foregroundServiceType="specialUse">
@@ -69,7 +69,7 @@
         <service
             android:label="Портал"
             android:icon="@drawable/ic_stat_portal"
-            android:name="com.multicore.vpn.widget.VpnTileService"
+            android:name="io.portal.vpn.widget.VpnTileService"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
             android:exported="true">
             <intent-filter>
@@ -77,7 +77,7 @@
             </intent-filter>
         </service>
         <receiver
-            android:name="com.multicore.vpn.BootReceiver"
+            android:name="io.portal.vpn.BootReceiver"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
@@ -85,12 +85,12 @@
             </intent-filter>
         </receiver>
         <receiver
-            android:name="com.multicore.vpn.widget.VpnWidgetProvider"
+            android:name="io.portal.vpn.widget.VpnWidgetProvider"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE"/>
-                <action android:name="com.multicore.vpn.widget.TOGGLE_VPN"/>
-                <action android:name="com.multicore.vpn.widget.UPDATE_WIDGET"/>
+                <action android:name="io.portal.vpn.widget.TOGGLE_VPN"/>
+                <action android:name="io.portal.vpn.widget.UPDATE_WIDGET"/>
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -127,7 +127,7 @@
         <provider
             android:name="com.google.mlkit.common.internal.MlKitInitProvider"
             android:exported="false"
-            android:authorities="com.multicore.vpn.mlkitinitprovider"
+            android:authorities="${applicationId}.mlkitinitprovider"
             android:initOrder="99"/>
         <activity
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
@@ -139,7 +139,7 @@
         <provider
             android:name="androidx.startup.InitializationProvider"
             android:exported="false"
-            android:authorities="com.multicore.vpn.androidx-startup">
+            android:authorities="${applicationId}.androidx-startup">
             <meta-data
                 android:name="androidx.emoji2.text.EmojiCompatInitializer"
                 android:value="androidx.startup"/>

@@ -5,11 +5,11 @@ plugins {
 }
 
 android {
-    namespace 'com.multicore.vpn'
+    namespace 'io.portal.vpn'
     compileSdk 35
 
     defaultConfig {
-        applicationId 'com.multicore.vpn'
+        applicationId 'io.portal.vpn'
         minSdk 26
         targetSdk 35
         versionCode 114
