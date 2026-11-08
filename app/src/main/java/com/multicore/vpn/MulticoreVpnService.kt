@@ -6,9 +6,6 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.graphics.BitmapFactory
-import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
@@ -16,82 +13,88 @@ import android.system.Os
 import android.system.OsConstants
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.multicore.vpn.widget.VpnWidgetProvider
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import java.io.File
+import java.net.Socket
 
 class MulticoreVpnService : VpnService() {
 
     companion object {
-        const val ACTION_CONNECT = "com.multicore.vpn.ACTION_CONNECT"
-        const val ACTION_DISCONNECT = "com.multicore.vpn.ACTION_DISCONNECT"
-        private const val CHANNEL_ID = "multicore_vpn_channel"
-        private const val NOTIFICATION_ID = 1001
-        private const val TAG = "MulticoreVpnService"
+        const val TAG = "MulticoreVpnService"
+        const val ACTION_START_VPN = "com.multicore.vpn.START_VPN"
+        const val ACTION_STOP_VPN = "com.multicore.vpn.STOP_VPN"
+        const val CHANNEL_ID = "multicore_vpn_channel"
+        const val NOTIFICATION_ID = 1001
 
-        var isRunning: Boolean = false
+        @Volatile
+        var isRunning = false
             private set
 
         @Volatile
-        var instance: MulticoreVpnService? = null
-            private set
-
-        fun protectSocket(socket: java.net.Socket): Boolean {
-            return instance?.protect(socket) ?: false
-        }
+        private var instance: MulticoreVpnService? = null
 
         fun start(context: Context) {
             val intent = Intent(context, MulticoreVpnService::class.java).apply {
-                action = ACTION_CONNECT
+                action = ACTION_START_VPN
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            ContextCompat.startForegroundService(context, intent)
         }
 
         fun stop(context: Context) {
             val intent = Intent(context, MulticoreVpnService::class.java).apply {
-                action = ACTION_DISCONNECT
+                action = ACTION_STOP_VPN
             }
             context.startService(intent)
         }
+
+        fun protectSocket(socket: Socket): Boolean {
+            return instance?.protect(socket) ?: false
+        }
     }
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO)
     private var vpnInterface: ParcelFileDescriptor? = null
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
         super.onCreate()
         instance = this
+        createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val action = intent?.action
-        Log.i(TAG, "onStartCommand action: $action")
+        val action = intent?.action ?: ACTION_START_VPN
+        Log.i(TAG, "onStartCommand received action: $action")
+
         when (action) {
-            ACTION_CONNECT -> startVpnSession()
-            ACTION_DISCONNECT -> stopVpnSession()
+            ACTION_START_VPN -> {
+                startForeground(NOTIFICATION_ID, buildNotification("🌀 В ПОРТАЛЕ", "Квантовый щит активен • Трафик защищён"))
+                startVpnSession()
+            }
+            ACTION_STOP_VPN -> {
+                stopVpnSession()
+                stopForeground(true)
+                stopSelf()
+            }
         }
         return START_STICKY
     }
 
     private fun startVpnSession() {
-        createNotificationChannel()
-        val notification = createNotification()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
-        } else {
-            startForeground(NOTIFICATION_ID, notification)
+        if (isRunning) {
+            Log.w(TAG, "VPN is already running")
+            return
         }
 
         serviceScope.launch {
             try {
                 val settings = AppSettings(this@MulticoreVpnService)
-                val subUrl = settings.lastSubscriptionUrl
+                val subUrl = settings.lastSubscriptionUrl.ifBlank {
+                    // Fallback to demo/default if not set
+                    "https://raw.githubusercontent.com/barry-far/V2ray-Configs/main/Sub1.txt"
+                }
+
                 val selectedRoute = MulticoreCoreJni.getSelectedRoute()
                 Log.i(TAG, "Starting Dual-Core VPN session (Xray + Mihomo) for route: $selectedRoute")
 
@@ -101,11 +104,6 @@ class MulticoreVpnService : VpnService() {
                     .addDnsServer("198.18.0.1")
                     .addRoute("0.0.0.0", 0) // Route all IPv4 traffic through VPN
                     .setMtu(1500)
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    builder.setMetered(false)
-                    builder.setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", 7890))
-                }
 
                 val selectedApps = settings.selectedAppPackages
                 val splitMode = settings.splitTunnelingMode
@@ -198,75 +196,63 @@ class MulticoreVpnService : VpnService() {
         Tun2SocksManager.stop()
         SingBoxManager.stopSingBox()
         MihomoManager.stopMihomo()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-            setUnderlyingNetworks(null)
-        }
+
         try {
             vpnInterface?.close()
         } catch (e: Exception) {
             Log.e(TAG, "Error closing VPN interface", e)
         }
         vpnInterface = null
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
+        TrafficStatsManager.resetSession()
         VpnWidgetProvider.notifyWidgetUpdate(this)
-        stopSelf()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        stopVpnSession()
+        serviceScope.cancel()
+        if (instance == this) {
+            instance = null
+        }
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-            )
-            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
+            val name = "Portal VPN Status"
+            val descriptionText = "Уведомления о состоянии квантового туннеля Portal VPN"
+            val importance = NotificationManager.IMPORTANCE_LOW
+            val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
+                description = descriptionText
+            }
+            val notificationManager: NotificationManager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            notificationManager.createNotificationChannel(channel)
         }
     }
 
-    private fun createNotification(): Notification {
-        val appIntent = Intent(this, MainActivity::class.java)
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        } else {
-            PendingIntent.FLAG_UPDATE_CURRENT
-        }
-        val pendingIntent = PendingIntent.getActivity(this, 0, appIntent, flags)
+    private fun buildNotification(title: String, content: String): Notification {
+        val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, launchIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
         val stopIntent = Intent(this, MulticoreVpnService::class.java).apply {
-            action = ACTION_DISCONNECT
+            action = ACTION_STOP_VPN
         }
-        val stopPendingIntent = PendingIntent.getService(this, 0, stopIntent, flags)
+        val stopPendingIntent = PendingIntent.getService(
+            this, 1, stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
 
-        val largeIcon = try {
-            BitmapFactory.decodeResource(resources, R.mipmap.ic_launcher)
-        } catch (e: Exception) {
-            null
-        }
-
-        val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Portal VPN")
-            .setContentText(getString(R.string.connected))
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(content)
             .setSmallIcon(R.drawable.ic_stat_portal)
             .setContentIntent(pendingIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Выйти из портала", stopPendingIntent)
+            .addAction(R.drawable.ic_stat_portal, "Разорвать портал", stopPendingIntent)
             .setOngoing(true)
-
-        if (largeIcon != null) {
-            builder.setLargeIcon(largeIcon)
-        }
-
-        return builder.build()
-    }
-
-    override fun onDestroy() {
-        stopVpnSession()
-        if (instance == this) instance = null
-        super.onDestroy()
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .build()
     }
 }
