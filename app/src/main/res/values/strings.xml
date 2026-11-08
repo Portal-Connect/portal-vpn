@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Portal</string>
+    <string name="active_core">Квантовые ядра</string>
+    <string name="auto_select">⚡️ Автопортал</string>
+    <string name="connect">Войти в портал</string>
+    <string name="connected">Телепортирован • В портале</string>
+    <string name="connecting">Квантовый переход…</string>
+    <string name="disconnect">Выйти из портала</string>
+    <string name="disconnected">В реальном мире</string>
+    <string name="import_subscription">Синхронизировать порталы</string>
+    <string name="notification_channel_name">Portal VPN Служба</string>
+    <string name="notification_title">Portal VPN</string>
+    <string name="subscription_url_hint">Ключ доступа к порталам (https://portal-connect.io/...)</string>
+</resources>
