@@ -60,6 +60,5 @@ jobs:
         with:
           files: |
             portal-vpn-release.apk
-            portal-vpn-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
