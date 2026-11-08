@@ -365,6 +365,15 @@ $fakeIpFilters
                 }
                 val settings = AppSettings(context)
                 if (settings.bypassRussianServices) {
+                    // Route Telegram through proxy group first, before general RU bypass rules
+                    val tgTarget = if (content.contains("name: Telegram")) "Telegram" else "PROXY"
+                    directRulesBuilder.append("  - GEOSITE,telegram,$tgTarget\n")
+                    directRulesBuilder.append("  - GEOIP,telegram,$tgTarget\n")
+                    directRulesBuilder.append("  - DOMAIN-SUFFIX,t.me,$tgTarget\n")
+                    directRulesBuilder.append("  - DOMAIN-SUFFIX,telegram.org,$tgTarget\n")
+                    directRulesBuilder.append("  - DOMAIN-SUFFIX,telegram.me,$tgTarget\n")
+                    directRulesBuilder.append("  - DOMAIN-SUFFIX,tdesktop.com,$tgTarget\n")
+
                     for (rule in RussianBypassManager.getMihomoDirectRules()) {
                         directRulesBuilder.append("  - $rule\n")
                     }
