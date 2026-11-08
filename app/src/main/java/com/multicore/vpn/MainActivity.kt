@@ -28,6 +28,7 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
 
     private lateinit var settings: AppSettings
+    private var currentInterfaceMode by mutableStateOf(AppInterfaceMode.UNSELECTED)
     private var isConnected by mutableStateOf(false)
     private var selectedRoute by mutableStateOf(PortalCoreJni.getSelectedRoute())
     private var showRouteBottomSheet by mutableStateOf(false)
@@ -97,6 +98,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = AppSettings(this)
+        currentInterfaceMode = settings.appInterfaceMode
         PortalCoreJni.init(this)
 
         val failoverFilter = android.content.IntentFilter(PortalFailoverWatchdog.ACTION_PORTAL_FAILOVER)
@@ -127,15 +129,17 @@ class MainActivity : ComponentActivity() {
                 themeMode = settings.themeMode,
                 accentOption = settings.accentColor
             ) {
-                if (settings.appInterfaceMode == AppInterfaceMode.UNSELECTED) {
+                if (currentInterfaceMode == AppInterfaceMode.UNSELECTED) {
                     ModeSelectionScreen(
                         onSelectMode = { mode ->
                             settings.appInterfaceMode = mode
+                            currentInterfaceMode = mode
                             themeRecomposeTrigger++
                         }
                     )
                 } else {
                     MainScreen(
+                        interfaceMode = currentInterfaceMode,
                         isConnected = isConnected,
                         selectedRoute = selectedRoute,
                         availableRoutes = availableRoutes,
@@ -170,7 +174,7 @@ class MainActivity : ComponentActivity() {
                             } else if (isConnected) {
                                 stopVpnService()
                             } else {
-                                if (settings.appInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
+                                if (currentInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
                                     val bestRoute = availableRoutes
                                         .filter { (pingsMap[it] ?: 0) > 0 }
                                         .minByOrNull { pingsMap[it] ?: 9999 }
@@ -226,6 +230,7 @@ class MainActivity : ComponentActivity() {
                             triggerIpCheck()
                         },
                         onSettingsChanged = {
+                            currentInterfaceMode = settings.appInterfaceMode
                             themeRecomposeTrigger++
                         },
                         onOpenSplitTunneling = {
@@ -254,6 +259,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         isConnected = PortalVpnService.isRunning
+        currentInterfaceMode = settings.appInterfaceMode
         refreshRoutes()
         selectedRoute = PortalCoreJni.getSelectedRoute()
         themeRecomposeTrigger++

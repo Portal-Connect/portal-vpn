@@ -107,6 +107,7 @@ fun MainScreen(
     speedHistory: List<Float>,
     ipCheckResult: IpCheckResult,
     settings: AppSettings,
+    interfaceMode: AppInterfaceMode = AppInterfaceMode.SINGLE_PORTAL,
     showRouteBottomSheet: Boolean,
     radarResults: Map<String, ServiceCheckResult>,
     isRadarScanning: Boolean,
@@ -131,7 +132,7 @@ fun MainScreen(
     onStartUpdateDownload: () -> Unit = {},
     onDismissUpdateDialog: () -> Unit = {}
 ) {
-    val isSinglePortalMode = (settings.appInterfaceMode == AppInterfaceMode.SINGLE_PORTAL)
+    val isSinglePortalMode = (interfaceMode == AppInterfaceMode.SINGLE_PORTAL)
     var selectedTab by remember { mutableStateOf(NavigationTab.HOME) }
     var showAddPortalDialog by remember { mutableStateOf(false) }
     var showSingleModeSettingsSheet by remember { mutableStateOf(false) }

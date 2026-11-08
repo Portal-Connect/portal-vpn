@@ -66,6 +66,7 @@ fun SettingsScreen(
     isCheckingUpdate: Boolean = false,
     onCheckUpdate: () -> Unit = {}
 ) {
+    var currentMode by remember(settings.appInterfaceMode) { mutableStateOf(settings.appInterfaceMode) }
     var themeMode by remember { mutableStateOf(settings.themeMode) }
     var accentOption by remember { mutableStateOf(settings.accentColor) }
     var dnsProvider by remember { mutableStateOf(settings.dnsProvider) }
@@ -102,11 +103,12 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
+                            currentMode = AppInterfaceMode.SINGLE_PORTAL
                             settings.appInterfaceMode = AppInterfaceMode.SINGLE_PORTAL
                             onSettingsChanged()
                         }
                         .background(
-                            if (settings.appInterfaceMode == AppInterfaceMode.SINGLE_PORTAL)
+                            if (currentMode == AppInterfaceMode.SINGLE_PORTAL)
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                             else Color.Transparent
                         )
@@ -128,7 +130,7 @@ fun SettingsScreen(
                             color = Color.Gray
                         )
                     }
-                    if (settings.appInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
+                    if (currentMode == AppInterfaceMode.SINGLE_PORTAL) {
                         Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
                     }
                 }
@@ -138,11 +140,12 @@ fun SettingsScreen(
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
                         .clickable {
+                            currentMode = AppInterfaceMode.MULTI_PORTAL
                             settings.appInterfaceMode = AppInterfaceMode.MULTI_PORTAL
                             onSettingsChanged()
                         }
                         .background(
-                            if (settings.appInterfaceMode == AppInterfaceMode.MULTI_PORTAL)
+                            if (currentMode == AppInterfaceMode.MULTI_PORTAL)
                                 MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
                             else Color.Transparent
                         )
@@ -153,6 +156,23 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
+                            text = "Множество Порталов (Эксперт)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Выбор любых стран, радар сервисов, тестирование задержек",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    if (currentMode == AppInterfaceMode.MULTI_PORTAL) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
                             text = "Множество Порталов (Эксперт)",
                             fontSize = 15.sp,
                             fontWeight = FontWeight.SemiBold,

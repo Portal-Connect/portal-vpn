@@ -57,6 +57,11 @@ The project has completely evolved into a native, high-performance **Android cli
    - Background health monitor tests Telegram connectivity through the active tunnel every 10 minutes.
    - If the active portal becomes unresponsive, the watchdog confirms the failure, scans available backup portals, and automatically switches both cores to the fastest responsive route with instant UI feedback.
 
+8. **Dual Interface Mode (Auto-Pilot ↔ Expert)**
+   - **«Single Portal (Auto-Pilot)»**: simplified, clutter-free experience for non-technical users. Single connect button, hidden tab bars and automated node picking.
+   - **«Multi-Portal (Expert)»**: full access to all 4 tabs (Gates, Portals, Radar, Settings) with manual server selection and custom target ping tests.
+   - Instant 1-tap switching between modes directly in Settings.
+
 ---
 
 ## 🏗️ System Architecture
@@ -91,10 +96,17 @@ flowchart TD
 
 ## 📱 Interface Screenshots
 
-| Gates (In Portal) | Service Radar | Portals Catalog & Ping |
+| Mode Selection (Onboarding) | Single Portal (Auto-Pilot) | Gates (Multi-Portal) |
 | :---: | :---: | :---: |
-| <img src="docs/screenshots/gates_connected.png" width="280" alt="Gates (In Portal)"/> | <img src="docs/screenshots/service_radar.png" width="280" alt="Service Radar"/> | <img src="docs/screenshots/portals_catalog.png" width="280" alt="Portals Catalog & Ping"/> |
-| *Living singularity, traffic counter & quantum shield status* | *End-to-end real delay test to Telegram, YouTube, Gemini* | *Smart target app selection, auto-sorting and catalog* |
+| <img src="docs/screenshots/mode_selection.png" width="280" alt="Mode Selection (Onboarding)"/> | <img src="docs/screenshots/single_portal_connected.png" width="280" alt="Single Portal (Auto-Pilot)"/> | <img src="docs/screenshots/gates_connected.png" width="280" alt="Gates (Multi-Portal)"/> |
+| *Intuitive mode selection on first launch* | *Single button, hidden tabs and auto node optimization* | *Living singularity, traffic counter & quantum shield* |
+
+<br>
+
+| Portals Catalog & Ping | Service Radar | Settings Mode Switcher |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/portals_catalog.png" width="280" alt="Portals Catalog & Ping"/> | <img src="docs/screenshots/service_radar.png" width="280" alt="Service Radar"/> | <img src="docs/screenshots/settings_mode_switcher.png" width="280" alt="Settings Mode Switcher"/> |
+| *End-to-end real delay test to YouTube, TG, ChatGPT* | *Real-time connectivity diagnostics across global services* | *Instant 1-tap interface mode switching & auto-updates* |
 
 ---
 
