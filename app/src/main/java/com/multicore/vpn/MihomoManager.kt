@@ -62,19 +62,17 @@ object MihomoManager {
                                         }
                                     }
 
-                                    // Special AI routing guard: If group is AI or Gemini, and the selected node is
-                                    // in a restricted country (Russia, Estonia, LTE), auto-pick an AI-friendly node (Finland, Germany, etc.)
+                                    // Special AI routing guard: If group is AI or Gemini, ALWAYS route through Finland (🇫🇮 Финляндия).
+                                    // If Finland is unavailable, fallback to Germany or Netherlands.
                                     val isAiGroup = groupKey.equals("AI", ignoreCase = true) || 
                                                     groupKey.contains("Gemini", ignoreCase = true) ||
                                                     groupKey.contains("ChatGPT", ignoreCase = true) ||
                                                     groupKey.contains("OpenAI", ignoreCase = true)
-                                    val isAiRestricted = nodeName.contains("Россия", ignoreCase = true) || 
-                                                         nodeName.contains("Эстония", ignoreCase = true) || 
-                                                         nodeName.contains("Обход", ignoreCase = true)
 
-                                    val aiFriendlyKeywords = listOf("Финляндия", "Германия", "Нидерланды", "Швеция", "Швейцария", "Польша", "США")
-                                    val effectiveTarget = if (isAiGroup && isAiRestricted) {
-                                        allList.firstOrNull { node -> aiFriendlyKeywords.any { node.contains(it, ignoreCase = true) } }
+                                    val effectiveTarget = if (isAiGroup) {
+                                        allList.firstOrNull { it.contains("Финляндия", ignoreCase = true) }
+                                            ?: allList.firstOrNull { it.contains("Германия", ignoreCase = true) }
+                                            ?: allList.firstOrNull { it.contains("Нидерланды", ignoreCase = true) }
                                             ?: target
                                     } else {
                                         target

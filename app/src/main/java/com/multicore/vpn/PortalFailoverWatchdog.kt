@@ -132,19 +132,13 @@ object PortalFailoverWatchdog {
         Log.i(TAG, "Pinging ${candidates.size} backup portals for Telegram failover...")
         val pings = ServerPingManager.pingAllAsync(candidates, PingTargetService.TELEGRAM)
 
-        // Find best working candidate, prioritizing AI-friendly countries (Finland, Germany, etc.)
+        // Find best working candidate with lowest ping, excluding restricted nodes
         val workingCandidates = pings.filter { it.value > 0 }
-
-        val aiFriendlyKeywords = listOf("Финляндия", "Германия", "Нидерланды", "Швеция", "Швейцария", "Польша", "США")
         val excludedKeywords = listOf("Россия", "Обход", "Эстония")
 
         val bestRouteEntry = workingCandidates.filter { entry ->
-            aiFriendlyKeywords.any { entry.key.contains(it, ignoreCase = true) } &&
             excludedKeywords.none { entry.key.contains(it, ignoreCase = true) }
         }.minByOrNull { it.value }
-            ?: workingCandidates.filter { entry ->
-                excludedKeywords.none { entry.key.contains(it, ignoreCase = true) }
-            }.minByOrNull { it.value }
             ?: workingCandidates.minByOrNull { it.value }
 
         if (bestRouteEntry == null) {

@@ -259,8 +259,11 @@ class MainActivity : ComponentActivity() {
         refreshRoutes()
         selectedRoute = PortalCoreJni.getSelectedRoute()
         if (currentInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
-            val needsBetterRoute = selectedRoute.isBlank() || AI_RESTRICTED_COUNTRIES.any { selectedRoute.contains(it, ignoreCase = true) }
-            if (needsBetterRoute) {
+            val isRestricted = selectedRoute.isBlank() || 
+                               selectedRoute.contains("Россия", ignoreCase = true) || 
+                               selectedRoute.contains("Обход", ignoreCase = true) || 
+                               selectedRoute.contains("Эстония", ignoreCase = true)
+            if (isRestricted) {
                 val best = selectBestAutoPilotRoute(availableRoutes, pingsMap)
                 if (best != null && best != selectedRoute) {
                     PortalCoreJni.setSelectedRoute(best)
@@ -277,48 +280,32 @@ class MainActivity : ComponentActivity() {
     }
 
     companion object {
-        val AI_FRIENDLY_COUNTRIES = listOf("Финляндия", "Германия", "Нидерланды", "Швеция", "Швейцария", "Польша", "США")
-        val AI_RESTRICTED_COUNTRIES = listOf("Россия", "Обход", "Эстония")
-
         fun selectBestAutoPilotRoute(availableRoutes: List<String>, pings: Map<String, Int>): String? {
-            // 1. Highest priority: AI-friendly routes (Finland, Germany, Netherlands, etc.) with valid ping
-            val aiWorking = availableRoutes.filter { route ->
-                AI_FRIENDLY_COUNTRIES.any { route.contains(it, ignoreCase = true) } &&
-                AI_RESTRICTED_COUNTRIES.none { route.contains(it, ignoreCase = true) } &&
+            // 1. Pick lowest ping route excluding known problematic restricted nodes
+            val nonRestricted = availableRoutes.filter { route ->
+                !route.contains("Россия", ignoreCase = true) &&
+                !route.contains("Обход", ignoreCase = true) &&
+                !route.contains("Эстония", ignoreCase = true) &&
                 (pings[route] ?: 0) > 0
             }
-            if (aiWorking.isNotEmpty()) {
-                return aiWorking.minByOrNull { pings[it] ?: 9999 }
+            if (nonRestricted.isNotEmpty()) {
+                return nonRestricted.minByOrNull { pings[it] ?: 9999 }
             }
 
-            // 2. Any non-restricted working route
-            val safeWorking = availableRoutes.filter { route ->
-                AI_RESTRICTED_COUNTRIES.none { route.contains(it, ignoreCase = true) } &&
-                (pings[route] ?: 0) > 0
-            }
-            if (safeWorking.isNotEmpty()) {
-                return safeWorking.minByOrNull { pings[it] ?: 9999 }
-            }
-
-            // 3. Any working route
+            // 2. Any working route with valid ping
             val anyWorking = availableRoutes.filter { (pings[it] ?: 0) > 0 }
             if (anyWorking.isNotEmpty()) {
                 return anyWorking.minByOrNull { pings[it] ?: 9999 }
             }
 
-            // 4. Any AI-friendly route even before ping completes
-            val aiFallback = availableRoutes.firstOrNull { route ->
-                AI_FRIENDLY_COUNTRIES.any { route.contains(it, ignoreCase = true) }
-            }
-            if (aiFallback != null) return aiFallback
-
-            // 5. Any safe fallback
-            val safeFallback = availableRoutes.firstOrNull { route ->
-                AI_RESTRICTED_COUNTRIES.none { route.contains(it, ignoreCase = true) }
-            }
-            if (safeFallback != null) return safeFallback
-
-            return availableRoutes.firstOrNull()
+            // 3. Fallback to Finland or first non-restricted route
+            return availableRoutes.firstOrNull { it.contains("Финляндия", ignoreCase = true) }
+                ?: availableRoutes.firstOrNull { 
+                    !it.contains("Россия", ignoreCase = true) && 
+                    !it.contains("Обход", ignoreCase = true) && 
+                    !it.contains("Эстония", ignoreCase = true) 
+                }
+                ?: availableRoutes.firstOrNull()
         }
     }
 
