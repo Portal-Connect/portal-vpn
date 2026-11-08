@@ -25,6 +25,12 @@ enum class DnsProvider(val displayName: String, val dns1: String, val dns2: Stri
     YANDEX("Yandex (77.88.8.8)", "77.88.8.8", "77.88.8.1")
 }
 
+enum class AppInterfaceMode(val title: String, val description: String) {
+    UNSELECTED("Не выбран", "Выбор режима при первом запуске"),
+    SINGLE_PORTAL("Один Портал", "Умный автопилот: всё работает в 1 нажатие, автоподбор лучших серверов"),
+    MULTI_PORTAL("Множество Порталов", "Режим эксперта: ручной выбор стран, радар сервисов, детальные настройки")
+}
+
 class AppSettings(context: Context) {
     private val prefs: SharedPreferences = context.getSharedPreferences("multicore_settings", Context.MODE_PRIVATE)
 
@@ -41,7 +47,19 @@ class AppSettings(context: Context) {
         private const val KEY_SUB_URL = "sub_url"
         private const val KEY_AUTO_FAILOVER = "auto_failover"
         private const val KEY_BYPASS_RU_SERVICES = "bypass_ru_services"
+        private const val KEY_APP_INTERFACE_MODE = "app_interface_mode"
     }
+
+    var appInterfaceMode: AppInterfaceMode
+        get() {
+            val name = prefs.getString(KEY_APP_INTERFACE_MODE, AppInterfaceMode.UNSELECTED.name)
+            return try {
+                AppInterfaceMode.valueOf(name ?: AppInterfaceMode.UNSELECTED.name)
+            } catch (e: Exception) {
+                AppInterfaceMode.UNSELECTED
+            }
+        }
+        set(value) = prefs.edit().putString(KEY_APP_INTERFACE_MODE, value.name).apply()
 
     var themeMode: ThemeMode
         get() {

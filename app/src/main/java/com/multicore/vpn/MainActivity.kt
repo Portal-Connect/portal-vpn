@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.multicore.vpn.ui.MainScreen
+import com.multicore.vpn.ui.ModeSelectionScreen
 import com.multicore.vpn.ui.AppSplitTunnelingActivity
 import com.multicore.vpn.ui.theme.MulticoreTheme
 import kotlinx.coroutines.delay
@@ -126,105 +127,126 @@ class MainActivity : ComponentActivity() {
                 themeMode = settings.themeMode,
                 accentOption = settings.accentColor
             ) {
-                MainScreen(
-                    isConnected = isConnected,
-                    selectedRoute = selectedRoute,
-                    availableRoutes = availableRoutes,
-                    pingsMap = pingsMap,
-                    isPinging = isPinging,
-                    selectedPingTarget = selectedPingTarget,
-                    trafficData = trafficData,
-                    speedHistory = speedHistory,
-                    ipCheckResult = ipCheckResult,
-                    settings = settings,
-                    showRouteBottomSheet = showRouteBottomSheet,
-                    radarResults = radarResults,
-                    isRadarScanning = isRadarScanning,
-                    updateInfo = updateInfo,
-                    isDownloadingUpdate = isDownloadingUpdate,
-                    updateDownloadProgress = updateDownloadProgress,
-                    currentVersion = BuildConfig.VERSION_NAME,
-                    isCheckingUpdate = isCheckingUpdate,
-                    onCheckUpdate = {
-                        checkForUpdates(showToastIfLatest = true)
-                    },
-                    onStartUpdateDownload = {
-                        startUpdateDownload()
-                    },
-                    onDismissUpdateDialog = {
-                        updateInfo = null
-                    },
-                    onToggleConnection = {
-                        if (availableRoutes.isEmpty()) {
-                            Toast.makeText(this, "Сначала добавьте сеть порталов", Toast.LENGTH_SHORT).show()
-                            showRouteBottomSheet = true
-                        } else if (isConnected) {
-                            stopVpnService()
-                        } else {
-                            checkAndStartVpn()
+                if (settings.appInterfaceMode == AppInterfaceMode.UNSELECTED) {
+                    ModeSelectionScreen(
+                        onSelectMode = { mode ->
+                            settings.appInterfaceMode = mode
+                            themeRecomposeTrigger++
                         }
-                    },
-                    onSelectRoute = { newRoute ->
-                        PortalCoreJni.setSelectedRoute(newRoute)
-                        selectedRoute = newRoute
-                        ipCheckResult = IpCheckResult(ip = "Сканирование...", country = "Смена портала...", isProtected = true)
-                        MihomoManager.selectProxyNode(newRoute)
-                        if (PortalVpnService.isRunning) {
-                            SingBoxManager.startSingBox(this, newRoute)
-                        }
-                        Toast.makeText(this, "Портал настроен: $newRoute", Toast.LENGTH_SHORT).show()
-                        if (isConnected) {
-                            ipCheckResult = IpCheckResult(ip = "", country = "Телепортация...")
-                            lifecycleScope.launch {
-                                delay(1500)
-                                triggerIpCheck()
-                                triggerRadarScan()
+                    )
+                } else {
+                    MainScreen(
+                        isConnected = isConnected,
+                        selectedRoute = selectedRoute,
+                        availableRoutes = availableRoutes,
+                        pingsMap = pingsMap,
+                        isPinging = isPinging,
+                        selectedPingTarget = selectedPingTarget,
+                        trafficData = trafficData,
+                        speedHistory = speedHistory,
+                        ipCheckResult = ipCheckResult,
+                        settings = settings,
+                        showRouteBottomSheet = showRouteBottomSheet,
+                        radarResults = radarResults,
+                        isRadarScanning = isRadarScanning,
+                        updateInfo = updateInfo,
+                        isDownloadingUpdate = isDownloadingUpdate,
+                        updateDownloadProgress = updateDownloadProgress,
+                        currentVersion = BuildConfig.VERSION_NAME,
+                        isCheckingUpdate = isCheckingUpdate,
+                        onCheckUpdate = {
+                            checkForUpdates(showToastIfLatest = true)
+                        },
+                        onStartUpdateDownload = {
+                            startUpdateDownload()
+                        },
+                        onDismissUpdateDialog = {
+                            updateInfo = null
+                        },
+                        onToggleConnection = {
+                            if (availableRoutes.isEmpty()) {
+                                Toast.makeText(this, "Сначала добавьте сеть порталов", Toast.LENGTH_SHORT).show()
+                                showRouteBottomSheet = true
+                            } else if (isConnected) {
+                                stopVpnService()
+                            } else {
+                                if (settings.appInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
+                                    val bestRoute = availableRoutes
+                                        .filter { (pingsMap[it] ?: 0) > 0 }
+                                        .minByOrNull { pingsMap[it] ?: 9999 }
+                                        ?: availableRoutes.firstOrNull()
+
+                                    if (bestRoute != null && bestRoute != selectedRoute) {
+                                        PortalCoreJni.setSelectedRoute(bestRoute)
+                                        selectedRoute = bestRoute
+                                        MihomoManager.selectProxyNode(bestRoute)
+                                    }
+                                }
+                                checkAndStartVpn()
                             }
+                        },
+                        onSelectRoute = { newRoute ->
+                            PortalCoreJni.setSelectedRoute(newRoute)
+                            selectedRoute = newRoute
+                            ipCheckResult = IpCheckResult(ip = "Сканирование...", country = "Смена портала...", isProtected = true)
+                            MihomoManager.selectProxyNode(newRoute)
+                            if (PortalVpnService.isRunning) {
+                                SingBoxManager.startSingBox(this, newRoute)
+                            }
+                            Toast.makeText(this, "Портал настроен: $newRoute", Toast.LENGTH_SHORT).show()
+                            if (isConnected) {
+                                ipCheckResult = IpCheckResult(ip = "", country = "Телепортация...")
+                                lifecycleScope.launch {
+                                    delay(1500)
+                                    triggerIpCheck()
+                                    triggerRadarScan()
+                                }
+                            }
+                        },
+                        onImportSubscription = { url ->
+                            handleImportSubscription(url)
+                        },
+                        onOpenQrScanner = {
+                            val intent = Intent(this, QrScannerActivity::class.java)
+                            qrScannerLauncher.launch(intent)
+                        },
+                        onDismissBottomSheet = {
+                            showRouteBottomSheet = false
+                        },
+                        onOpenBottomSheet = {
+                            showRouteBottomSheet = true
+                        },
+                        onPingAllServers = { target ->
+                            selectedPingTarget = target
+                            triggerPingAll(target)
+                        },
+                        onRefreshIpCheck = {
+                            Toast.makeText(this, "Сканирование матрицы...", Toast.LENGTH_SHORT).show()
+                            ipCheckResult = IpCheckResult(ip = "", country = "Сканирование координат...")
+                            triggerIpCheck()
+                        },
+                        onSettingsChanged = {
+                            themeRecomposeTrigger++
+                        },
+                        onOpenSplitTunneling = {
+                            val intent = Intent(this, AppSplitTunnelingActivity::class.java)
+                            startActivity(intent)
+                        },
+                        onToggleFavorite = { route ->
+                            val currentFavs = settings.favoriteRoutes.toMutableSet()
+                            if (currentFavs.contains(route)) {
+                                currentFavs.remove(route)
+                            } else {
+                                currentFavs.add(route)
+                            }
+                            settings.favoriteRoutes = currentFavs
+                            themeRecomposeTrigger++
+                        },
+                        onStartRadarScan = {
+                            triggerRadarScan()
                         }
-                    },
-                    onImportSubscription = { url ->
-                        handleImportSubscription(url)
-                    },
-                    onOpenQrScanner = {
-                        val intent = Intent(this, QrScannerActivity::class.java)
-                        qrScannerLauncher.launch(intent)
-                    },
-                    onDismissBottomSheet = {
-                        showRouteBottomSheet = false
-                    },
-                    onOpenBottomSheet = {
-                        showRouteBottomSheet = true
-                    },
-                    onPingAllServers = { target ->
-                        selectedPingTarget = target
-                        triggerPingAll(target)
-                    },
-                    onRefreshIpCheck = {
-                        Toast.makeText(this, "Сканирование матрицы...", Toast.LENGTH_SHORT).show()
-                        ipCheckResult = IpCheckResult(ip = "", country = "Сканирование координат...")
-                        triggerIpCheck()
-                    },
-                    onSettingsChanged = {
-                        themeRecomposeTrigger++
-                    },
-                    onOpenSplitTunneling = {
-                        val intent = Intent(this, AppSplitTunnelingActivity::class.java)
-                        startActivity(intent)
-                    },
-                    onToggleFavorite = { route ->
-                        val currentFavs = settings.favoriteRoutes.toMutableSet()
-                        if (currentFavs.contains(route)) {
-                            currentFavs.remove(route)
-                        } else {
-                            currentFavs.add(route)
-                        }
-                        settings.favoriteRoutes = currentFavs
-                        themeRecomposeTrigger++
-                    },
-                    onStartRadarScan = {
-                        triggerRadarScan()
-                    }
-                )
+                    )
+                }
             }
         }
     }

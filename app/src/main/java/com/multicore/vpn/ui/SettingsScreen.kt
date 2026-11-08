@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.multicore.vpn.AccentColorOption
+import com.multicore.vpn.AppInterfaceMode
 import com.multicore.vpn.AppSettings
 import com.multicore.vpn.DnsProvider
 import com.multicore.vpn.ThemeMode
@@ -82,6 +84,93 @@ fun SettingsScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        Text(
+            text = "Режим интерфейса",
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            settings.appInterfaceMode = AppInterfaceMode.SINGLE_PORTAL
+                            onSettingsChanged()
+                        }
+                        .background(
+                            if (settings.appInterfaceMode == AppInterfaceMode.SINGLE_PORTAL)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else Color.Transparent
+                        )
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🌀", fontSize = 24.sp)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Один Портал (Автопилот)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Всё в 1 кнопку. Автоподбор лучших серверов и автосмена",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    if (settings.appInterfaceMode == AppInterfaceMode.SINGLE_PORTAL) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable {
+                            settings.appInterfaceMode = AppInterfaceMode.MULTI_PORTAL
+                            onSettingsChanged()
+                        }
+                        .background(
+                            if (settings.appInterfaceMode == AppInterfaceMode.MULTI_PORTAL)
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                            else Color.Transparent
+                        )
+                        .padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("🌌", fontSize = 24.sp)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Множество Порталов (Эксперт)",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Выбор любых стран, радар сервисов, тестирование задержек",
+                            fontSize = 12.sp,
+                            color = Color.Gray
+                        )
+                    }
+                    if (settings.appInterfaceMode == AppInterfaceMode.MULTI_PORTAL) {
+                        Icon(Icons.Default.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+
         Text(
             text = "Внешний вид",
             fontSize = 18.sp,

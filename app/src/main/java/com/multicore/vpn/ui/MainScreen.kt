@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -85,6 +86,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.multicore.vpn.AppInterfaceMode
 import com.multicore.vpn.AppSettings
 import com.multicore.vpn.IpCheckResult
 import com.multicore.vpn.PingTargetService
@@ -129,8 +131,10 @@ fun MainScreen(
     onStartUpdateDownload: () -> Unit = {},
     onDismissUpdateDialog: () -> Unit = {}
 ) {
+    val isSinglePortalMode = (settings.appInterfaceMode == AppInterfaceMode.SINGLE_PORTAL)
     var selectedTab by remember { mutableStateOf(NavigationTab.HOME) }
     var showAddPortalDialog by remember { mutableStateOf(false) }
+    var showSingleModeSettingsSheet by remember { mutableStateOf(false) }
 
     if (updateInfo != null && updateInfo.hasUpdate) {
         AlertDialog(
@@ -237,6 +241,15 @@ fun MainScreen(
                     }
                 },
                 actions = {
+                    if (isSinglePortalMode) {
+                        IconButton(onClick = { showSingleModeSettingsSheet = true }) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Настройки",
+                                tint = MaterialTheme.colorScheme.onBackground
+                            )
+                        }
+                    }
                     Box(
                         modifier = Modifier
                             .padding(end = 16.dp)
@@ -274,28 +287,30 @@ fun MainScreen(
             )
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
-                NavigationTab.entries.forEach { tab ->
-                    val isSelected = (tab == selectedTab)
-                    val icon = when (tab) {
-                        NavigationTab.HOME -> Icons.Default.Home
-                        NavigationTab.PORTALS -> Icons.Default.Public
-                        NavigationTab.RADAR -> Icons.Default.Radar
-                        NavigationTab.SETTINGS -> Icons.Default.Settings
-                    }
-                    NavigationBarItem(
-                        selected = isSelected,
-                        onClick = { selectedTab = tab },
-                        icon = { Icon(icon, contentDescription = tab.title) },
-                        label = { Text(tab.title, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                            unselectedIconColor = Color.Gray,
-                            unselectedTextColor = Color.Gray
+            if (!isSinglePortalMode) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+                    NavigationTab.entries.forEach { tab ->
+                        val isSelected = (tab == selectedTab)
+                        val icon = when (tab) {
+                            NavigationTab.HOME -> Icons.Default.Home
+                            NavigationTab.PORTALS -> Icons.Default.Public
+                            NavigationTab.RADAR -> Icons.Default.Radar
+                            NavigationTab.SETTINGS -> Icons.Default.Settings
+                        }
+                        NavigationBarItem(
+                            selected = isSelected,
+                            onClick = { selectedTab = tab },
+                            icon = { Icon(icon, contentDescription = tab.title) },
+                            label = { Text(tab.title, fontSize = 11.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = MaterialTheme.colorScheme.primary,
+                                selectedTextColor = MaterialTheme.colorScheme.primary,
+                                indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
+                                unselectedIconColor = Color.Gray,
+                                unselectedTextColor = Color.Gray
+                            )
                         )
-                    )
+                    }
                 }
             }
         },
@@ -306,7 +321,7 @@ fun MainScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when (selectedTab) {
+            when (if (isSinglePortalMode) NavigationTab.HOME else selectedTab) {
                 NavigationTab.HOME -> {
                     HomeTabContent(
                         isConnected = isConnected,
@@ -316,6 +331,7 @@ fun MainScreen(
                         selectedPingTarget = selectedPingTarget,
                         trafficData = trafficData,
                         speedHistory = speedHistory,
+                        isSinglePortalMode = isSinglePortalMode,
                         onToggleConnection = {
                             if (availableRoutes.isEmpty()) {
                                 showAddPortalDialog = true
@@ -598,6 +614,32 @@ fun MainScreen(
                     }
                 }
             }
+
+            if (isSinglePortalMode && showSingleModeSettingsSheet) {
+                val settingsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+                ModalBottomSheet(
+                    onDismissRequest = { showSingleModeSettingsSheet = false },
+                    sheetState = settingsSheetState,
+                    containerColor = MaterialTheme.colorScheme.background
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .fillMaxHeight(0.9f)
+                    ) {
+                        SettingsScreen(
+                            settings = settings,
+                            onSettingsChanged = onSettingsChanged,
+                            onOpenSplitTunneling = onOpenSplitTunneling,
+                            onRefreshSubscription = { onImportSubscription(settings.lastSubscriptionUrl) },
+                            onOpenQrScanner = onOpenQrScanner,
+                            currentVersion = currentVersion,
+                            isCheckingUpdate = isCheckingUpdate,
+                            onCheckUpdate = onCheckUpdate
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -855,6 +897,7 @@ fun HomeTabContent(
     selectedPingTarget: PingTargetService,
     trafficData: TrafficStatsData,
     speedHistory: List<Float>,
+    isSinglePortalMode: Boolean = false,
     onToggleConnection: () -> Unit,
     onOpenBottomSheet: () -> Unit,
     onImportSubscription: (String) -> Unit,
@@ -1004,53 +1047,105 @@ fun HomeTabContent(
                 }
             }
         } else {
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onOpenBottomSheet() },
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+            if (isSinglePortalMode) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00E5FF).copy(alpha = 0.35f))
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color(0xFF00E5FF).copy(alpha = 0.15f))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "⚡️ АВТОПИЛОТ",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = Color(0xFF00E5FF)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Оптимальный узел • Авто-подбор",
+                                    fontSize = 11.sp,
+                                    color = Color.Gray
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Точка телепортации",
-                                fontSize = 12.sp,
-                                color = Color.Gray
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "• ${selectedPingTarget.iconEmoji} ${selectedPingTarget.title}",
-                                fontSize = 11.sp,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.SemiBold
+                                text = selectedRoute.ifBlank { "Авто-выбор при подключении" },
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = selectedRoute.ifBlank { "Выберите портал" },
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                        val ping = pingsMap[selectedRoute] ?: -1
+                        PingBadge(pingMs = ping)
+                    }
+                }
+            } else {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenBottomSheet() },
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = "Точка телепортации",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "• ${selectedPingTarget.iconEmoji} ${selectedPingTarget.title}",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = selectedRoute.ifBlank { "Выберите портал" },
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        val ping = pingsMap[selectedRoute] ?: -1
+                        PingBadge(pingMs = ping)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = "Выбрать портал",
+                            tint = Color.Gray
                         )
                     }
-                    val ping = pingsMap[selectedRoute] ?: -1
-                    PingBadge(pingMs = ping)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        Icons.Default.ChevronRight,
-                        contentDescription = "Выбрать портал",
-                        tint = Color.Gray
-                    )
                 }
             }
         }
