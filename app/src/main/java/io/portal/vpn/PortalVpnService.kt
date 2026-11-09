@@ -124,13 +124,17 @@ class PortalVpnService : VpnService() {
                     .addAddress("198.18.0.2", 30)
                     .addDnsServer("198.18.0.1")
                     .addDnsServer(dns1)
-                    // Explicitly route DNS servers to ensure UDP DNS packets enter the TUN interface
-                    .addRoute("198.18.0.1", 32)
-                    .addRoute(dns1, 32)
-                    .addRoute(dns2, 32)
                     .addRoute("0.0.0.0", 0)
                     .allowBypass()
                     .setMtu(1500)
+                    
+                try {
+                    builder.addRoute("198.18.0.1", 32)
+                    if (dns1.isNotBlank()) builder.addRoute(dns1, 32)
+                    if (dns2.isNotBlank()) builder.addRoute(dns2, 32)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to add explicit route for DNS", e)
+                }
 
                 // Add split routing for LAN Bypass on modern Androids
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
