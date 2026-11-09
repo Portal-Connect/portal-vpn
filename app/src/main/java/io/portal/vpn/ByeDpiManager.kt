@@ -31,15 +31,14 @@ object ByeDpiManager {
         stopByeDpi()
 
         try {
-            // Proven Russian TSPPU multi-stage evasion for YouTube and GoogleVideo:
+            // Clean TLS Record desync strategy for YouTube and GoogleVideo:
+            // Bypasses Russian TSPPU without corrupting TLS records on BoringSSL:
             val args = arrayOf(
                 "-i", "127.0.0.1",
                 "-p", port.toString(),
-                "-s1", "-q1", "-Y",
-                "-Ar", "-s5", "-o1+s",
-                "-At", "-f-1", "-r1+s",
-                "-As", "-s1", "-o1+s", "-s-1",
-                "-An"
+                "-s", "1",
+                "-d", "2",
+                "-r", "1+s"
             )
 
             Log.i(TAG, "Creating ByeDPI JNI socket with arguments: ${args.joinToString(" ")}")

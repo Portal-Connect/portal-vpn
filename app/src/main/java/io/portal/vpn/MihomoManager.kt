@@ -77,11 +77,12 @@ object MihomoManager {
                                     }
 
                                     val isYouTubeGroup = groupKey.equals("YouTube", ignoreCase = true)
-                                    val isAiOrGoogleGroup = groupKey.equals("AI", ignoreCase = true) || 
+                                    val isAiOrGoogleGroup = !isYouTubeGroup && (
+                                                            groupKey.equals("AI", ignoreCase = true) || 
                                                             groupKey.equals("ChatGPT", ignoreCase = true) ||
                                                             groupKey.equals("OpenAI", ignoreCase = true) ||
                                                             groupKey.contains("Gemini", ignoreCase = true) ||
-                                                            groupKey.contains("Google", ignoreCase = true)
+                                                            groupKey.contains("Google", ignoreCase = true))
                                     val isAdsGroup = groupKey.equals("ADS_BAN", ignoreCase = true)
                                     val isBypassGroup = groupKey.contains("VK", ignoreCase = true) || groupKey.contains("Sber", ignoreCase = true)
 
@@ -89,7 +90,7 @@ object MihomoManager {
                                         isAdsGroup -> if ("REJECT" in allList) "REJECT" else null
                                         isBypassGroup -> if ("DIRECT" in allList) "DIRECT" else null
                                         isYouTubeGroup -> {
-                                            if (useByeDpi && ByeDpiManager.isRunning && allList.any { it.contains("ByeDPI") }) {
+                                            if (useByeDpi && allList.any { it.contains("ByeDPI") }) {
                                                 allList.firstOrNull { it.contains("ByeDPI") }
                                             } else {
                                                 cachedYtNode ?: allList.firstOrNull { it.contains("Германия") } ?: allList.firstOrNull { it.contains("Россия") }
@@ -148,6 +149,10 @@ object MihomoManager {
     fun setYouTubeRouting(context: Context, useByeDpi: Boolean) {
         Executors.newSingleThreadExecutor().execute {
             try {
+                if (useByeDpi && !ByeDpiManager.isRunning) {
+                    ByeDpiManager.startByeDpi(context)
+                    Thread.sleep(200)
+                }
                 val url = URL("http://127.0.0.1:9090/proxies/YouTube")
                 val conn = url.openConnection() as HttpURLConnection
                 conn.connectTimeout = 1500
@@ -163,7 +168,7 @@ object MihomoManager {
                             allList.add(allArray.getString(i))
                         }
                     }
-                    val target = if (useByeDpi && ByeDpiManager.isRunning && allList.any { it.contains("ByeDPI") }) {
+                    val target = if (useByeDpi && allList.any { it.contains("ByeDPI") }) {
                         allList.firstOrNull { it.contains("ByeDPI") }
                     } else {
                         resolveBestYouTubeNode(allList)
@@ -173,7 +178,6 @@ object MihomoManager {
                     }
                     if (target != null) {
                         putProxySelection("YouTube", target)
-                        putProxySelection("Google / Youtube / Gemini", target)
                         Log.i(TAG, "Switched YouTube routing (useByeDpi: $useByeDpi) to: $target")
                     }
                 }
@@ -699,6 +703,9 @@ $fakeIpFilters
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,ggpht.com,$ytTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,youtu.be,$ytTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,youtubei.googleapis.com,$ytTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,yt3.googleusercontent.com,$ytTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,yt4.googleusercontent.com,$ytTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,jnn-pa.googleapis.com,$ytTarget\n")
                 directRulesBuilder.append("  - DOMAIN-KEYWORD,youtube,$ytTarget\n")
                 if (settings.bypassRussianServices) {
                     // Route Telegram through proxy group first, before general RU bypass rules
