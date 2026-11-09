@@ -198,4 +198,12 @@ class AppSettings(context: Context) {
     var hapticFeedbackEnabled: Boolean
         get() = prefs.getBoolean("haptic_feedback", true)
         set(value) = prefs.edit().putBoolean("haptic_feedback", value).apply()
+
+    var blockAds: Boolean
+        get() = prefs.getBoolean("block_ads", true)
+        set(value) = prefs.edit().putBoolean("block_ads", value).apply()
+
+    var youtubeNoAdsBypass: Boolean
+        get() = prefs.getBoolean("youtube_no_ads_bypass", true)
+        set(value) = prefs.edit().putBoolean("youtube_no_ads_bypass", value).apply()
 }

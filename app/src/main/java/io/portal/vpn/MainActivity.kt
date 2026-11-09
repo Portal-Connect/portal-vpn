@@ -79,6 +79,12 @@ class MainActivity : ComponentActivity() {
         // Returned from battery settings
     }
 
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        Log.i("MainActivity", "POST_NOTIFICATIONS granted: $granted")
+    }
+
     private val failoverReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == PortalFailoverWatchdog.ACTION_PORTAL_FAILOVER) {
@@ -110,12 +116,19 @@ class MainActivity : ComponentActivity() {
         currentInterfaceMode = settings.appInterfaceMode
         PortalCoreJni.init(this)
 
-        val failoverFilter = android.content.IntentFilter(PortalFailoverWatchdog.ACTION_PORTAL_FAILOVER)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(failoverReceiver, failoverFilter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(failoverReceiver, failoverFilter)
+            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
+
+        val failoverFilter = android.content.IntentFilter(PortalFailoverWatchdog.ACTION_PORTAL_FAILOVER)
+        androidx.core.content.ContextCompat.registerReceiver(
+            this,
+            failoverReceiver,
+            failoverFilter,
+            androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         if (settings.lastSubscriptionUrl.isNotBlank()) {
             lifecycleScope.launch {
                 PortalCoreJni.importSubscriptionAsync(settings.lastSubscriptionUrl)
@@ -355,14 +368,17 @@ class MainActivity : ComponentActivity() {
                 return anyWorking.minByOrNull { pings[it] ?: 9999 }
             }
 
-            // 3. Fallback to Finland or first non-restricted route
-            return availableRoutes.firstOrNull { it.contains("Финляндия", ignoreCase = true) }
-                ?: availableRoutes.firstOrNull { 
-                    !it.contains("Россия", ignoreCase = true) && 
-                    !it.contains("Обход", ignoreCase = true) && 
-                    !it.contains("Эстония", ignoreCase = true) 
-                }
-                ?: availableRoutes.firstOrNull()
+            // 3. Fallback to best reliable European nodes
+            val fallbackPreferences = listOf("Польша", "Германия", "Швейцария", "Нидерланды", "Швеция", "Финляндия")
+            for (pref in fallbackPreferences) {
+                val match = availableRoutes.firstOrNull { it.contains(pref, ignoreCase = true) }
+                if (match != null) return match
+            }
+            return availableRoutes.firstOrNull { 
+                !it.contains("Россия", ignoreCase = true) && 
+                !it.contains("Обход", ignoreCase = true) && 
+                !it.contains("Эстония", ignoreCase = true) 
+            } ?: availableRoutes.firstOrNull()
         }
     }
 

@@ -53,10 +53,17 @@ class VpnTileService : TileService() {
         tile.icon = Icon.createWithResource(this, R.drawable.ic_stat_portal)
         if (PortalVpnService.isRunning) {
             tile.state = Tile.STATE_ACTIVE
-            tile.label = "В портале"
+            val route = io.portal.vpn.PortalCoreJni.getSelectedRoute().ifBlank { "В портале" }
+            tile.label = route
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                tile.subtitle = "Активен"
+            }
         } else {
             tile.state = Tile.STATE_INACTIVE
             tile.label = "Войти в портал"
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                tile.subtitle = "Отключен"
+            }
         }
         tile.updateTile()
     }

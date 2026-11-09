@@ -88,7 +88,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.portal.vpn.AppInterfaceMode
 import io.portal.vpn.AppSettings
-import io.portal.vpn.AutopilotPriority
 import io.portal.vpn.HapticFeedbackManager
 import io.portal.vpn.IpCheckResult
 import io.portal.vpn.PingTargetService
@@ -1117,57 +1116,6 @@ fun HomeTabContent(
                             }
                             val ping = pingsMap[selectedRoute] ?: -1
                             PingBadge(pingMs = ping)
-                        }
-
-                        if (settings != null) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                text = "Приоритет автопилота:",
-                                fontSize = 11.sp,
-                                color = Color.Gray,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                AutopilotPriority.entries.forEach { priority ->
-                                    val isSelected = (settings.autopilotPriority == priority)
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1f)
-                                            .clip(RoundedCornerShape(10.dp))
-                                            .background(
-                                                if (isSelected) Color(0xFF00E5FF).copy(alpha = 0.2f)
-                                                else MaterialTheme.colorScheme.surfaceVariant
-                                            )
-                                            .border(
-                                                1.dp,
-                                                if (isSelected) Color(0xFF00E5FF) else Color.Transparent,
-                                                RoundedCornerShape(10.dp)
-                                            )
-                                            .clickable {
-                                                HapticFeedbackManager.nodeSelected(context)
-                                                settings.autopilotPriority = priority
-                                                onSettingsChanged?.invoke()
-                                            }
-                                            .padding(vertical = 8.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(text = priority.icon, fontSize = 13.sp)
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Text(
-                                                text = priority.title,
-                                                fontSize = 12.sp,
-                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                                color = if (isSelected) Color(0xFF00E5FF) else MaterialTheme.colorScheme.onSurface
-                                            )
-                                        }
-                                    }
-                                }
-                            }
                         }
                     }
                 }

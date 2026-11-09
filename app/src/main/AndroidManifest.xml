@@ -96,6 +96,14 @@
                 android:name="android.appwidget.provider"
                 android:resource="@xml/vpn_widget_info"/>
         </receiver>
+        <receiver
+            android:name="io.portal.vpn.VpnNotificationReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="io.portal.vpn.ACTION_NOTIFICATION_PING"/>
+                <action android:name="io.portal.vpn.ACTION_NOTIFICATION_STOP"/>
+            </intent-filter>
+        </receiver>
         <activity
             android:name="androidx.compose.ui.tooling.PreviewActivity"
             android:exported="true"/>

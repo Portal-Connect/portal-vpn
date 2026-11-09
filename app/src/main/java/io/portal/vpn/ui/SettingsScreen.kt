@@ -53,6 +53,7 @@ import io.portal.vpn.AccentColorOption
 import io.portal.vpn.AppInterfaceMode
 import io.portal.vpn.AppSettings
 import io.portal.vpn.DnsProvider
+import io.portal.vpn.MihomoManager
 import io.portal.vpn.ThemeMode
 
 @Composable
@@ -74,6 +75,8 @@ fun SettingsScreen(
     var killSwitch by remember { mutableStateOf(settings.killSwitch) }
     var autoFailover by remember { mutableStateOf(settings.autoFailoverEnabled) }
     var bypassRussianServices by remember { mutableStateOf(settings.bypassRussianServices) }
+    var blockAds by remember { mutableStateOf(settings.blockAds) }
+    var youtubeNoAdsBypass by remember { mutableStateOf(settings.youtubeNoAdsBypass) }
     var hapticFeedback by remember { mutableStateOf(settings.hapticFeedbackEnabled) }
 
     val scrollState = rememberScrollState()
@@ -368,19 +371,24 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Text(
                                 text = "Прямой доступ к сервисам РФ",
                                 fontSize = 15.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "DIRECT",
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier
                                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
                                     .padding(horizontal = 6.dp, vertical = 2.dp)
@@ -400,6 +408,94 @@ fun SettingsScreen(
                         onCheckedChange = {
                             bypassRussianServices = it
                             settings.bypassRussianServices = it
+                            onSettingsChanged()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Блокировка рекламы и трекеров",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Очищает сайты и приложения от Яндекс.Директа, баннеров, видеорекламы и трекеров на уровне ядра",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            lineHeight = 16.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = blockAds,
+                        onCheckedChange = {
+                            blockAds = it
+                            settings.blockAds = it
+                            onSettingsChanged()
+                        },
+                        colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)
+                    )
+                }
+
+                val localContext = androidx.compose.ui.platform.LocalContext.current
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "YouTube без рекламы (ByeDPI)",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                            Text(
+                                text = if (youtubeNoAdsBypass) "0 ADS • РФ" else "VPN • EU",
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (youtubeNoAdsBypass) Color(0xFF10B981) else MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier
+                                    .background(
+                                        (if (youtubeNoAdsBypass) Color(0xFF10B981) else MaterialTheme.colorScheme.primary).copy(alpha = 0.15f),
+                                        RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            text = if (youtubeNoAdsBypass)
+                                "Прямой обход DPI без рекламы на полной скорости вашего интернета в РФ"
+                            else
+                                "Туннелирование через зарубежный VPN-сервер (Германия/ЕС). Видеопоток стабилен у любых провайдеров",
+                            fontSize = 12.sp,
+                            color = Color.Gray,
+                            lineHeight = 16.sp
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = youtubeNoAdsBypass,
+                        onCheckedChange = {
+                            youtubeNoAdsBypass = it
+                            settings.youtubeNoAdsBypass = it
+                            MihomoManager.setYouTubeRouting(localContext, it)
                             onSettingsChanged()
                         },
                         colors = SwitchDefaults.colors(checkedThumbColor = MaterialTheme.colorScheme.primary)

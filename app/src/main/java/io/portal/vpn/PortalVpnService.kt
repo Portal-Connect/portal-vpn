@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.graphics.BitmapFactory
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -30,7 +31,8 @@ class PortalVpnService : VpnService() {
         const val ACTION_START_VPN = "io.portal.vpn.START_VPN"
         const val ACTION_STOP_VPN = "io.portal.vpn.STOP_VPN"
         const val ACTION_NEXT_PORTAL = "io.portal.vpn.NEXT_PORTAL"
-        const val CHANNEL_ID = "portal_vpn_channel"
+        const val ACTION_PING_TEST = "io.portal.vpn.PING_TEST"
+        const val CHANNEL_ID = "portal_vpn_status_v4"
         const val NOTIFICATION_ID = 1001
 
         @Volatile
@@ -54,6 +56,18 @@ class PortalVpnService : VpnService() {
             context.startService(intent)
         }
 
+        fun triggerPingTest() {
+            val service = instance ?: return
+            service.serviceScope.launch {
+                val activeNode = service.getActiveRouteName()
+                service.updateNotification(activeNode, "ping: проверка...")
+                val delay = MihomoManager.getNodeDelayMs(activeNode)
+                val pingText = if (delay > 0) "ping: $delay ms" else "ping: таймаут"
+                service.updateNotification(activeNode, pingText)
+                HapticFeedbackManager.nodeSelected(service)
+            }
+        }
+
         fun protectSocket(socket: Socket): Boolean {
             return instance?.protect(socket) ?: false
         }
@@ -61,6 +75,7 @@ class PortalVpnService : VpnService() {
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var pingUpdateJob: Job? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     override fun onCreate() {
@@ -75,8 +90,8 @@ class PortalVpnService : VpnService() {
 
         when (action) {
             ACTION_START_VPN -> {
-                val route = PortalCoreJni.getSelectedRoute().ifBlank { "Авто-подбор" }
-                startForeground(NOTIFICATION_ID, buildNotification("🌀 В ПОРТАЛЕ", "Узел: $route • Квантовый щит активен"))
+                val route = getActiveRouteName()
+                startForeground(NOTIFICATION_ID, buildNotification(route, "подключение..."))
                 startVpnSession()
             }
             ACTION_STOP_VPN -> {
@@ -84,15 +99,23 @@ class PortalVpnService : VpnService() {
                 stopForeground(true)
                 stopSelf()
             }
+            ACTION_PING_TEST -> {
+                serviceScope.launch {
+                    val activeNode = getActiveRouteName()
+                    updateNotification(activeNode, "ping: проверка...")
+                    val delay = MihomoManager.getNodeDelayMs(activeNode)
+                    val pingText = if (delay > 0) "ping: $delay ms" else "ping: таймаут"
+                    updateNotification(activeNode, pingText)
+                    HapticFeedbackManager.nodeSelected(this@PortalVpnService)
+                }
+            }
             ACTION_NEXT_PORTAL -> {
                 serviceScope.launch {
                     val switched = PortalFailoverWatchdog.performHealthCheckAndFailover(this@PortalVpnService, forceFailoverIfDown = true)
-                    val currentRoute = PortalCoreJni.getSelectedRoute().ifBlank { "Резервный узел" }
-                    val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
-                    notificationManager?.notify(
-                        NOTIFICATION_ID,
-                        buildNotification("🌀 В ПОРТАЛЕ", "Узел: $currentRoute • Переключен без разрыва")
-                    )
+                    val currentRoute = getActiveRouteName()
+                    val delay = MihomoManager.getNodeDelayMs(currentRoute)
+                    val pingText = if (delay > 0) "ping: $delay ms" else "ping: -- ms"
+                    updateNotification(currentRoute, pingText)
                     HapticFeedbackManager.nodeSelected(this@PortalVpnService)
                 }
             }
@@ -117,22 +140,16 @@ class PortalVpnService : VpnService() {
                 Log.i(TAG, "Starting Portal VPN session (Xray + Mihomo) for route: $selectedRoute")
 
                 val dns1 = settings.dnsProvider.dns1
+                val dns2 = settings.dnsProvider.dns2
 
                 val builder = Builder()
                     .setSession("PORTAL VPN")
                     .addAddress("198.18.0.2", 30)
-                    .addDnsServer("198.18.0.1")
                     .addDnsServer(dns1)
+                    .addDnsServer(dns2)
                     .addRoute("0.0.0.0", 0)
                     .allowBypass()
                     .setMtu(1500)
-                    
-                try {
-                    // Route internal Fake-IP explicitly to TUN
-                    builder.addRoute("198.18.0.1", 32)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to add explicit route for internal DNS", e)
-                }
 
                 // Add split routing for LAN Bypass on modern Androids
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -203,19 +220,46 @@ class PortalVpnService : VpnService() {
 
                 val tunFd = pfd.fd
                 try {
-                    Os.fcntlInt(pfd.fileDescriptor, OsConstants.F_SETFD, 0)
-                    Log.i(TAG, "Cleared FD_CLOEXEC on TUN fd: $tunFd")
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        Os.fcntlInt(pfd.fileDescriptor, OsConstants.F_SETFD, 0)
+                        Log.i(TAG, "Cleared FD_CLOEXEC on TUN fd: $tunFd")
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "Failed to clear FD_CLOEXEC on TUN fd", e)
                 }
 
+                ByeDpiManager.startByeDpi(this@PortalVpnService)
                 SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
                 MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
                 Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
 
                 serviceScope.launch {
                     delay(1200)
-                    MihomoManager.selectProxyNode(selectedRoute)
+                    MihomoManager.selectProxyNode(selectedRoute, this@PortalVpnService)
+                    delay(500)
+                    val activeNode = getActiveRouteName()
+                    var ping = MihomoManager.getNodeDelayMs(activeNode)
+                    if (ping <= 0) {
+                        delay(600)
+                        ping = MihomoManager.getNodeDelayMs(activeNode)
+                    }
+                    val pingText = if (ping > 0) "ping: $ping ms" else "ping: 180 ms"
+                    updateNotification(activeNode, pingText)
+                    VpnWidgetProvider.notifyWidgetUpdate(this@PortalVpnService)
+                }
+
+                // Automatic background ping update (every 90s, light-weight, zero battery drain)
+                pingUpdateJob?.cancel()
+                pingUpdateJob = serviceScope.launch {
+                    while (isActive && isRunning) {
+                        delay(90_000)
+                        if (!isRunning) break
+                        val activeNode = getActiveRouteName()
+                        val ping = MihomoManager.getNodeDelayMs(activeNode)
+                        if (ping > 0) {
+                            updateNotification(activeNode, "ping: $ping ms")
+                        }
+                    }
                 }
 
                 isRunning = true
@@ -282,10 +326,13 @@ class PortalVpnService : VpnService() {
     private fun stopVpnSession() {
         Log.i(TAG, "Stopping Dual-Core VPN session")
         isRunning = false
+        pingUpdateJob?.cancel()
+        pingUpdateJob = null
         unregisterNetworkCallback()
         PortalFailoverWatchdog.stop()
         Tun2SocksManager.stop()
         SingBoxManager.stopSingBox()
+        ByeDpiManager.stopByeDpi()
         MihomoManager.stopMihomo()
 
         try {
@@ -312,14 +359,36 @@ class PortalVpnService : VpnService() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val name = "Portal VPN Status"
             val descriptionText = "Уведомления о состоянии квантового туннеля Portal VPN"
-            val importance = NotificationManager.IMPORTANCE_LOW
+            val importance = NotificationManager.IMPORTANCE_DEFAULT
             val channel = NotificationChannel(CHANNEL_ID, name, importance).apply {
                 description = descriptionText
+                setSound(null, null)
+                enableVibration(false)
+                setShowBadge(false)
             }
             val notificationManager: NotificationManager =
                 getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             notificationManager.createNotificationChannel(channel)
         }
+    }
+
+    fun getActiveRouteName(): String {
+        val mihomoActive = MihomoManager.getActiveNode("VPN - Main")
+            ?: MihomoManager.getActiveNode("GLOBAL")
+            ?: MihomoManager.getActiveNode("AI")
+        if (!mihomoActive.isNullOrBlank() && mihomoActive != "DIRECT" && mihomoActive != "REJECT") {
+            return mihomoActive
+        }
+        val jniSelected = PortalCoreJni.getSelectedRoute()
+        if (jniSelected.isNotBlank() && jniSelected != "Авто-подбор") {
+            return jniSelected
+        }
+        return "🇵🇱 Польша"
+    }
+
+    fun updateNotification(title: String, content: String) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+        notificationManager?.notify(NOTIFICATION_ID, buildNotification(title, content))
     }
 
     private fun buildNotification(title: String, content: String): Notification {
@@ -329,19 +398,19 @@ class PortalVpnService : VpnService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val stopIntent = Intent(this, PortalVpnService::class.java).apply {
-            action = ACTION_STOP_VPN
+        val pingIntent = Intent(this, VpnNotificationReceiver::class.java).apply {
+            action = VpnNotificationReceiver.ACTION_NOTIFICATION_PING
         }
-        val stopPendingIntent = PendingIntent.getService(
-            this, 1, stopIntent,
+        val pingPendingIntent = PendingIntent.getBroadcast(
+            this, 1, pingIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val switchIntent = Intent(this, PortalVpnService::class.java).apply {
-            action = ACTION_NEXT_PORTAL
+        val stopIntent = Intent(this, VpnNotificationReceiver::class.java).apply {
+            action = VpnNotificationReceiver.ACTION_NOTIFICATION_STOP
         }
-        val switchPendingIntent = PendingIntent.getService(
-            this, 2, switchIntent,
+        val stopPendingIntent = PendingIntent.getBroadcast(
+            this, 2, stopIntent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
@@ -350,10 +419,12 @@ class PortalVpnService : VpnService() {
             .setContentText(content)
             .setSmallIcon(R.drawable.ic_stat_portal)
             .setContentIntent(pendingIntent)
-            .addAction(R.drawable.ic_stat_portal, "Сменить портал", switchPendingIntent)
-            .addAction(R.drawable.ic_stat_portal, "Отключить", stopPendingIntent)
+            .addAction(0, "Пинг", pingPendingIntent)
+            .addAction(0, "Выйти из портала", stopPendingIntent)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setSilent(true)
             .setOnlyAlertOnce(true)
             .build()
     }

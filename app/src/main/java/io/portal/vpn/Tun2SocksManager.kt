@@ -46,7 +46,7 @@ object Tun2SocksManager {
                 })
                 put("inbounds", JSONArray().apply {
                     put(JSONObject().apply {
-                        put("tag", "incy-native-tun")
+                        put("tag", "portal-native-tun")
                         put("protocol", "tun")
                         put("settings", JSONObject().apply {
                             put("name", "portal0")
@@ -85,7 +85,7 @@ object Tun2SocksManager {
                         put(JSONObject().apply {
                             put("type", "field")
                             put("inboundTag", JSONArray().apply {
-                                put("incy-native-tun")
+                                put("portal-native-tun")
                             })
                             put("outboundTag", "proxy")
                         })
