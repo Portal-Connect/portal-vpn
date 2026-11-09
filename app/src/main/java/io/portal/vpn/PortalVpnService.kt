@@ -139,9 +139,12 @@ class PortalVpnService : VpnService() {
                 // Add split routing for LAN Bypass on modern Androids
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     try {
-                        builder.excludeRoute(android.net.IpPrefix("192.168.0.0/16"))
-                        builder.excludeRoute(android.net.IpPrefix("10.0.0.0/8"))
-                        builder.excludeRoute(android.net.IpPrefix("172.16.0.0/12"))
+                        val inet192 = java.net.InetAddress.getByName("192.168.0.0")
+                        val inet10 = java.net.InetAddress.getByName("10.0.0.0")
+                        val inet172 = java.net.InetAddress.getByName("172.16.0.0")
+                        builder.excludeRoute(android.net.IpPrefix(inet192, 16))
+                        builder.excludeRoute(android.net.IpPrefix(inet10, 8))
+                        builder.excludeRoute(android.net.IpPrefix(inet172, 12))
                     } catch (e: Exception) {
                         Log.w(TAG, "Failed to exclude LAN routes", e)
                     }
