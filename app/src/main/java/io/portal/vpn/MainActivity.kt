@@ -401,8 +401,13 @@ class MainActivity : ComponentActivity() {
         if (isDownloadingUpdate) return
         isDownloadingUpdate = true
         updateDownloadProgress = 0
+        val fallbackBytes = (info.apkSizeMb * 1024 * 1024).toLong()
         lifecycleScope.launch {
-            val success = PortalUpdateManager.downloadAndInstallApk(this@MainActivity, info.downloadUrl) { progress ->
+            val success = PortalUpdateManager.downloadAndInstallApk(
+                this@MainActivity,
+                info.downloadUrl,
+                fallbackTotalBytes = fallbackBytes
+            ) { progress ->
                 updateDownloadProgress = progress
             }
             isDownloadingUpdate = false

@@ -7,6 +7,7 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -61,6 +62,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -146,37 +148,112 @@ fun MainScreen(
 
     if (updateInfo != null && updateInfo.hasUpdate) {
         AlertDialog(
-            onDismissRequest = onDismissUpdateDialog,
-            title = {
-                Text(
-                    text = "Обновление Portal VPN v${updateInfo.latestVersion}",
-                    fontWeight = FontWeight.Bold
-                )
+            onDismissRequest = {
+                if (!isDownloadingUpdate) onDismissUpdateDialog()
             },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        text = "Размер файла: ${String.format("%.1f", updateInfo.apkSizeMb)} MB",
-                        fontSize = 13.sp,
-                        color = Color.Gray
+                        text = "🚀",
+                        fontSize = 20.sp
                     )
-                    if (updateInfo.changelog.isNotBlank()) {
+                    Column {
                         Text(
-                            text = updateInfo.changelog,
-                            fontSize = 14.sp
+                            text = "Обновление Portal VPN",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Версия v${updateInfo.latestVersion} • ${String.format(java.util.Locale.US, "%.1f", updateInfo.apkSizeMb)} MB",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.Gray
                         )
                     }
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     if (isDownloadingUpdate) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        androidx.compose.material3.LinearProgressIndicator(
-                            progress = { updateDownloadProgress / 100f },
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)),
                             modifier = Modifier.fillMaxWidth()
-                        )
-                        Text(
-                            text = "Загрузка обновления: $updateDownloadProgress%",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = if (updateDownloadProgress >= 100) "Запуск установщика..." else "Скачивание обновления...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Text(
+                                        text = "$updateDownloadProgress%",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                androidx.compose.material3.LinearProgressIndicator(
+                                    progress = { (updateDownloadProgress.coerceIn(0, 100)) / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                )
+                                val downloadedMb = (updateInfo.apkSizeMb * updateDownloadProgress / 100.0)
+                                Text(
+                                    text = String.format(java.util.Locale.US, "Загружено: %.1f MB из %.1f MB", downloadedMb, updateInfo.apkSizeMb),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Что нового:",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 80.dp, max = 220.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState())
+                                .padding(10.dp)
+                        ) {
+                            Text(
+                                text = updateInfo.changelog.ifBlank { "Улучшения стабильности и скорости работы." },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                lineHeight = 18.sp
+                            )
+                        }
                     }
                 }
             },
@@ -186,11 +263,17 @@ fun MainScreen(
                     enabled = !isDownloadingUpdate
                 ) {
                     if (isDownloadingUpdate) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            strokeWidth = 2.dp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                color = MaterialTheme.colorScheme.onPrimary,
+                                strokeWidth = 2.dp
+                            )
+                            Text(if (updateDownloadProgress >= 100) "Установка..." else "Загрузка ($updateDownloadProgress%)...")
+                        }
                     } else {
                         Text("Установить")
                     }

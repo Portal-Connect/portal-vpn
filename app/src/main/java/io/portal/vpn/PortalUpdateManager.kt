@@ -111,6 +111,7 @@ object PortalUpdateManager {
     suspend fun downloadAndInstallApk(
         context: Context,
         downloadUrl: String,
+        fallbackTotalBytes: Long = 0L,
         onProgress: (Int) -> Unit = {}
     ): Boolean = withContext(Dispatchers.IO) {
         try {
@@ -119,31 +120,64 @@ object PortalUpdateManager {
             val apkFile = File(updatesDir, "portal-vpn-update.apk")
             if (apkFile.exists()) apkFile.delete()
 
-            val url = URL(downloadUrl)
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                connectTimeout = 15000
-                readTimeout = 30000
-                instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "PortalVPN-AndroidApp")
+            var currentUrl = downloadUrl
+            var connection: HttpURLConnection? = null
+            var redirects = 0
+            while (redirects < 5) {
+                val conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "PortalVPN-AndroidApp")
+                }
+                val code = conn.responseCode
+                if (code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                    code == HttpURLConnection.HTTP_MOVED_PERM ||
+                    code == 307 || code == 308) {
+                    val location = conn.getHeaderField("Location")
+                    if (!location.isNullOrBlank()) {
+                        currentUrl = location
+                        conn.disconnect()
+                        redirects++
+                        continue
+                    }
+                }
+                connection = conn
+                break
             }
 
-            val totalLength = connection.contentLength
-            var downloaded = 0L
+            val finalConn = connection ?: return@withContext false
+            var totalLength = finalConn.contentLengthLong
+            if (totalLength <= 0) {
+                totalLength = fallbackTotalBytes
+            }
 
-            connection.inputStream.use { input ->
+            var downloaded = 0L
+            var lastProgress = -1
+
+            finalConn.inputStream.use { input ->
                 FileOutputStream(apkFile).use { output ->
-                    val buffer = ByteArray(32 * 1024)
+                    val buffer = ByteArray(64 * 1024)
                     var bytesRead: Int
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         output.write(buffer, 0, bytesRead)
                         downloaded += bytesRead
                         if (totalLength > 0) {
-                            val progress = ((downloaded * 100) / totalLength).toInt()
-                            onProgress(progress)
+                            val progress = ((downloaded * 100) / totalLength).toInt().coerceIn(0, 99)
+                            if (progress != lastProgress) {
+                                lastProgress = progress
+                                withContext(Dispatchers.Main) {
+                                    onProgress(progress)
+                                }
+                            }
                         }
                     }
                     output.flush()
                 }
+            }
+
+            withContext(Dispatchers.Main) {
+                onProgress(100)
             }
 
             Log.i(TAG, "APK downloaded successfully (${apkFile.length()} bytes)")
