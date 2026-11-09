@@ -121,6 +121,9 @@ class PortalVpnService : VpnService() {
                     .addAddress("198.18.0.2", 30)
                     .addDnsServer("198.18.0.1")
                     .addDnsServer("77.88.8.8")
+                    // Explicitly route DNS servers to ensure UDP DNS packets enter the TUN interface
+                    .addRoute("198.18.0.1", 32)
+                    .addRoute("77.88.8.8", 32)
                     .addRoute("0.0.0.0", 0)
                     .setMtu(1500)
 

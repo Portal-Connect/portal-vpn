@@ -75,7 +75,17 @@ class VpnWidgetProvider : AppWidgetProvider() {
                 if (PortalVpnService.isRunning) {
                     PortalVpnService.stop(context)
                 } else {
-                    PortalVpnService.start(context)
+                    try {
+                        PortalVpnService.start(context)
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to start VPN service from broadcast receiver", e)
+                        // In case of ForegroundServiceStartNotAllowedException on older Android 12/13, 
+                        // launch main activity to trigger it properly.
+                        val fallbackIntent = Intent(context, MainActivity::class.java).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                        context.startActivity(fallbackIntent)
+                    }
                 }
             }
             ACTION_UPDATE_WIDGET, Intent.ACTION_BOOT_COMPLETED -> {
