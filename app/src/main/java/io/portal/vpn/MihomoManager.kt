@@ -449,6 +449,17 @@ $fakeIpFilters
                 directRulesBuilder.append("  - IP-CIDR,10.0.0.0/8,DIRECT,no-resolve\n")
                 directRulesBuilder.append("  - IP-CIDR,172.16.0.0/12,DIRECT,no-resolve\n")
                 directRulesBuilder.append("  - IP-CIDR,192.168.0.0/16,DIRECT,no-resolve\n")
+                
+                // CRITICAL FIX: Break DNS routing loop by forcing explicit DIRECT rules for DNS IPs
+                directRulesBuilder.append("  - IP-CIDR,$dns1/32,DIRECT,no-resolve\n")
+                if (dns2.isNotBlank()) directRulesBuilder.append("  - IP-CIDR,$dns2/32,DIRECT,no-resolve\n")
+                directRulesBuilder.append("  - IP-CIDR,1.1.1.1/32,DIRECT,no-resolve\n")
+                directRulesBuilder.append("  - IP-CIDR,1.0.0.1/32,DIRECT,no-resolve\n")
+                directRulesBuilder.append("  - IP-CIDR,8.8.8.8/32,DIRECT,no-resolve\n")
+                directRulesBuilder.append("  - IP-CIDR,8.8.4.4/32,DIRECT,no-resolve\n")
+                directRulesBuilder.append("  - IP-CIDR,77.88.8.8/32,DIRECT,no-resolve\n")
+                directRulesBuilder.append("  - IP-CIDR,94.140.14.14/32,DIRECT,no-resolve\n")
+
                 for (domain in proxyDomains) {
                     directRulesBuilder.append("  - DOMAIN-SUFFIX,$domain,DIRECT\n")
                 }
