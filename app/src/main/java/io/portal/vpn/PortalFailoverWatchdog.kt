@@ -3,6 +3,8 @@
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import io.portal.vpn.widget.VpnTileService
+import io.portal.vpn.widget.VpnWidgetProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -14,10 +16,10 @@ import kotlinx.coroutines.launch
 /**
  * Background health watchdog for active VPN portals.
  *
- * Periodically verifies network health to Telegram (or chosen service) through the currently active portal.
- * If the active portal becomes unresponsive (ping fails twice consecutively), it automatically scans available
- * portals, identifies the fastest responsive backup portal, and seamlessly switches to it without interrupting
- * the overall VPN session.
+ * Periodically verifies network health through the currently active portal.
+ * If the active portal becomes unresponsive or suffers from excessively high ping (> 380 ms),
+ * it automatically scans available portals, identifies the fastest responsive backup portal,
+ * and seamlessly switches to it without dropping the overall VPN session.
  */
 object PortalFailoverWatchdog {
     private const val TAG = "PortalWatchdog"
@@ -27,11 +29,14 @@ object PortalFailoverWatchdog {
     const val EXTRA_NEW_ROUTE = "new_route"
     const val EXTRA_NEW_PING = "new_ping"
 
-    // 10 minutes between health checks as requested by user
-    private const val CHECK_INTERVAL_MS = 10 * 60 * 1000L
+    // High ping threshold for autopilot: if ping exceeds 380ms, switch to a faster node
+    const val HIGH_PING_THRESHOLD_MS = 380
 
-    // Initial grace period after connection start before first check (30 seconds)
-    private const val INITIAL_DELAY_MS = 30 * 1000L
+    // 2 minutes between health checks during continuous connection
+    private const val CHECK_INTERVAL_MS = 2 * 60 * 1000L
+
+    // Initial grace period after connection start before first check (20 seconds)
+    private const val INITIAL_DELAY_MS = 20 * 1000L
 
     private val watchdogScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var watchdogJob: Job? = null
@@ -47,7 +52,7 @@ object PortalFailoverWatchdog {
     fun start(context: Context) {
         stop()
         watchdogJob = watchdogScope.launch {
-            Log.i(TAG, "Portal Failover Watchdog started (interval: 10 min, target: Telegram)")
+            Log.i(TAG, "Portal Failover Watchdog started (interval: 2 min)")
             lastCheckStatus = "Запуск мониторинга..."
             delay(INITIAL_DELAY_MS)
 
@@ -65,7 +70,11 @@ object PortalFailoverWatchdog {
         Log.i(TAG, "Portal Failover Watchdog stopped")
     }
 
-    suspend fun performHealthCheckAndFailover(context: Context, forceFailoverIfDown: Boolean = true): Boolean {
+    suspend fun performHealthCheckAndFailover(
+        context: Context,
+        forceFailoverIfDown: Boolean = true,
+        currentKnownPing: Int? = null
+    ): Boolean {
         val settings = AppSettings(context)
         if (!settings.autoFailoverEnabled) {
             Log.d(TAG, "Auto-failover disabled in settings, skipping check")
@@ -87,27 +96,24 @@ object PortalFailoverWatchdog {
         }
 
         lastHealthCheckTime = System.currentTimeMillis()
-        Log.i(TAG, "Checking health of active portal '$currentRoute' to Telegram...")
-
-        // Primary health check
-        var ping = ServerPingManager.pingRoute(currentRoute, PingTargetService.TELEGRAM.testUrl)
+        var ping = currentKnownPing ?: ServerPingManager.pingRoute(currentRoute, PingTargetService.YOUTUBE.testUrl)
 
         if (ping <= 0) {
-            // Transient jitter check: retry in 4 seconds to prevent false alarms during Wi-Fi / LTE handoffs
-            Log.w(TAG, "First ping failed for '$currentRoute'. Verifying with 4s confirmation retry...")
-            delay(4000L)
+            // Confirmation retry in 2 seconds to avoid false alarms during network transitions
+            Log.w(TAG, "First ping failed for '$currentRoute'. Verifying with 2s confirmation retry...")
+            delay(2000L)
             ping = ServerPingManager.pingRoute(currentRoute, PingTargetService.TELEGRAM.testUrl)
         }
 
-        if (ping > 0) {
-            lastCheckStatus = "В норме (${ping} ms к Telegram)"
-            Log.i(TAG, "Active portal '$currentRoute' is healthy: ${ping}ms to Telegram")
+        if (ping in 1..HIGH_PING_THRESHOLD_MS) {
+            lastCheckStatus = "В норме (${ping} ms)"
+            Log.i(TAG, "Active portal '$currentRoute' is healthy: ${ping}ms")
             return true
         }
 
-        // Active portal is confirmed dead/unreachable
-        lastCheckStatus = "Сбой связи на '$currentRoute'"
-        Log.e(TAG, "Portal '$currentRoute' unreachable! Initiating automated failover sequence...")
+        // Active portal is degraded (high ping) or dead/unreachable
+        lastCheckStatus = if (ping <= 0) "Сбой связи на '$currentRoute'" else "Высокий пинг ($ping ms) на '$currentRoute'"
+        Log.w(TAG, "Portal '$currentRoute' degraded ($ping ms)! Initiating automated failover sequence...")
 
         if (!forceFailoverIfDown) {
             return false
@@ -129,12 +135,12 @@ object PortalFailoverWatchdog {
             return false
         }
 
-        Log.i(TAG, "Pinging ${candidates.size} backup portals for Telegram failover...")
-        val pings = ServerPingManager.pingAllAsync(candidates, PingTargetService.TELEGRAM)
+        Log.i(TAG, "Pinging ${candidates.size} backup portals for autopilot failover...")
+        val pings = ServerPingManager.pingAllAsync(candidates, PingTargetService.YOUTUBE)
 
-        // Find best working candidate with lowest ping, excluding restricted nodes
+        // Find best working candidate with lowest ping, excluding Russian exit nodes
         val workingCandidates = pings.filter { it.value > 0 }
-        val excludedKeywords = listOf("Россия", "Обход", "Эстония")
+        val excludedKeywords = listOf("Россия", "Обход")
 
         val bestRouteEntry = workingCandidates.filter { entry ->
             excludedKeywords.none { entry.key.contains(it, ignoreCase = true) }
@@ -155,7 +161,7 @@ object PortalFailoverWatchdog {
         PortalCoreJni.setSelectedRoute(newRoute)
 
         // 2. Switch Mihomo proxy node
-        MihomoManager.selectProxyNode(newRoute)
+        MihomoManager.selectProxyNode(newRoute, context)
 
         // 3. Switch SingBox / Xray outbound if running
         if (PortalVpnService.isRunning) {
@@ -165,7 +171,16 @@ object PortalFailoverWatchdog {
         lastCheckStatus = "Переключен на '$newRoute' (${newPing} ms)"
         Log.i(TAG, "Failover completed successfully! New active portal: '$newRoute'")
 
-        // 4. Broadcast notification to UI
+        // 4. Update notification, tiles, and widget
+        val settings = AppSettings(context)
+        val isSingle = settings.appInterfaceMode != AppInterfaceMode.MULTI_PORTAL
+        val displayTitle = if (isSingle) "В квантовом портале" else newRoute
+        PortalVpnService.updateActiveNotification(displayTitle, "ping: $newPing ms")
+        VpnTileService.requestTileUpdate(context)
+        VpnWidgetProvider.notifyWidgetUpdate(context)
+        HapticFeedbackManager.nodeSelected(context)
+
+        // 5. Broadcast notification to UI
         val failoverIntent = Intent(ACTION_PORTAL_FAILOVER).apply {
             putExtra(EXTRA_OLD_ROUTE, failedRoute)
             putExtra(EXTRA_NEW_ROUTE, newRoute)

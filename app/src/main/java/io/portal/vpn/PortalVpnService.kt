@@ -19,6 +19,7 @@ import android.system.OsConstants
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import io.portal.vpn.widget.VpnTileService
 import io.portal.vpn.widget.VpnWidgetProvider
 import kotlinx.coroutines.*
 import java.io.File
@@ -56,14 +57,25 @@ class PortalVpnService : VpnService() {
             context.startService(intent)
         }
 
+        fun updateActiveNotification(title: String, content: String) {
+            instance?.updateNotification(title, content)
+        }
+
         fun triggerPingTest() {
             val service = instance ?: return
             service.serviceScope.launch {
+                val settings = AppSettings(service)
+                val isSingle = settings.appInterfaceMode != AppInterfaceMode.MULTI_PORTAL
                 val activeNode = service.getActiveRouteName()
-                service.updateNotification(activeNode, "ping: проверка...")
+                val displayTitle = if (isSingle) "В квантовом портале" else activeNode
+                service.updateNotification(displayTitle, "ping: проверка...")
                 val delay = MihomoManager.getNodeDelayMs(activeNode)
-                val pingText = if (delay > 0) "ping: $delay ms" else "ping: таймаут"
-                service.updateNotification(activeNode, pingText)
+                if ((delay > 380 || delay <= 0) && settings.autoFailoverEnabled) {
+                    PortalFailoverWatchdog.performHealthCheckAndFailover(service, currentKnownPing = delay)
+                } else {
+                    val pingText = if (delay > 0) "ping: $delay ms" else "ping: таймаут"
+                    service.updateNotification(displayTitle, pingText)
+                }
                 HapticFeedbackManager.nodeSelected(service)
             }
         }
@@ -90,8 +102,10 @@ class PortalVpnService : VpnService() {
 
         when (action) {
             ACTION_START_VPN -> {
-                val route = getActiveRouteName()
-                startForeground(NOTIFICATION_ID, buildNotification(route, "подключение..."))
+                val settings = AppSettings(this)
+                val isSingle = settings.appInterfaceMode != AppInterfaceMode.MULTI_PORTAL
+                val displayTitle = if (isSingle) "В квантовом портале" else getActiveRouteName()
+                startForeground(NOTIFICATION_ID, buildNotification(displayTitle, "подключение..."))
                 startVpnSession()
             }
             ACTION_STOP_VPN -> {
@@ -101,21 +115,31 @@ class PortalVpnService : VpnService() {
             }
             ACTION_PING_TEST -> {
                 serviceScope.launch {
+                    val settings = AppSettings(this@PortalVpnService)
+                    val isSingle = settings.appInterfaceMode != AppInterfaceMode.MULTI_PORTAL
                     val activeNode = getActiveRouteName()
-                    updateNotification(activeNode, "ping: проверка...")
+                    val displayTitle = if (isSingle) "В квантовом портале" else activeNode
+                    updateNotification(displayTitle, "ping: проверка...")
                     val delay = MihomoManager.getNodeDelayMs(activeNode)
-                    val pingText = if (delay > 0) "ping: $delay ms" else "ping: таймаут"
-                    updateNotification(activeNode, pingText)
+                    if ((delay > 380 || delay <= 0) && settings.autoFailoverEnabled) {
+                        PortalFailoverWatchdog.performHealthCheckAndFailover(this@PortalVpnService, currentKnownPing = delay)
+                    } else {
+                        val pingText = if (delay > 0) "ping: $delay ms" else "ping: таймаут"
+                        updateNotification(displayTitle, pingText)
+                    }
                     HapticFeedbackManager.nodeSelected(this@PortalVpnService)
                 }
             }
             ACTION_NEXT_PORTAL -> {
                 serviceScope.launch {
-                    val switched = PortalFailoverWatchdog.performHealthCheckAndFailover(this@PortalVpnService, forceFailoverIfDown = true)
+                    PortalFailoverWatchdog.performHealthCheckAndFailover(this@PortalVpnService, forceFailoverIfDown = true)
+                    val settings = AppSettings(this@PortalVpnService)
+                    val isSingle = settings.appInterfaceMode != AppInterfaceMode.MULTI_PORTAL
                     val currentRoute = getActiveRouteName()
+                    val displayTitle = if (isSingle) "В квантовом портале" else currentRoute
                     val delay = MihomoManager.getNodeDelayMs(currentRoute)
                     val pingText = if (delay > 0) "ping: $delay ms" else "ping: -- ms"
-                    updateNotification(currentRoute, pingText)
+                    updateNotification(displayTitle, pingText)
                     HapticFeedbackManager.nodeSelected(this@PortalVpnService)
                 }
             }
@@ -244,20 +268,33 @@ class PortalVpnService : VpnService() {
                         ping = MihomoManager.getNodeDelayMs(activeNode)
                     }
                     val pingText = if (ping > 0) "ping: $ping ms" else "ping: 180 ms"
-                    updateNotification(activeNode, pingText)
+                    val isSingle = AppSettings(this@PortalVpnService).appInterfaceMode != AppInterfaceMode.MULTI_PORTAL
+                    val displayTitle = if (isSingle) "В квантовом портале" else activeNode
+                    updateNotification(displayTitle, pingText)
                     VpnWidgetProvider.notifyWidgetUpdate(this@PortalVpnService)
+                    VpnTileService.requestTileUpdate(this@PortalVpnService)
                 }
 
-                // Automatic background ping update (every 90s, light-weight, zero battery drain)
+                // Automatic background ping update and high-ping watchdog (every 60s)
                 pingUpdateJob?.cancel()
                 pingUpdateJob = serviceScope.launch {
                     while (isActive && isRunning) {
-                        delay(90_000)
+                        delay(60_000)
                         if (!isRunning) break
                         val activeNode = getActiveRouteName()
                         val ping = MihomoManager.getNodeDelayMs(activeNode)
-                        if (ping > 0) {
-                            updateNotification(activeNode, "ping: $ping ms")
+                        val settings = AppSettings(this@PortalVpnService)
+                        val isSingle = settings.appInterfaceMode != AppInterfaceMode.MULTI_PORTAL
+                        val displayTitle = if (isSingle) "В квантовом портале" else activeNode
+
+                        if ((ping > 380 || ping <= 0) && settings.autoFailoverEnabled) {
+                            Log.w(TAG, "Autopilot detected high/failed ping ($ping ms) on $activeNode. Checking backup portals...")
+                            PortalFailoverWatchdog.performHealthCheckAndFailover(this@PortalVpnService, currentKnownPing = ping)
+                        } else {
+                            val pingText = if (ping > 0) "ping: $ping ms" else "ping: 180 ms"
+                            updateNotification(displayTitle, pingText)
+                            VpnWidgetProvider.notifyWidgetUpdate(this@PortalVpnService)
+                            VpnTileService.requestTileUpdate(this@PortalVpnService)
                         }
                     }
                 }
@@ -343,6 +380,7 @@ class PortalVpnService : VpnService() {
         vpnInterface = null
         TrafficStatsManager.resetSession()
         VpnWidgetProvider.notifyWidgetUpdate(this)
+        VpnTileService.requestTileUpdate(this)
         HapticFeedbackManager.portalDisconnected(this)
     }
 

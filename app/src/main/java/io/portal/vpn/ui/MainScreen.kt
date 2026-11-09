@@ -1099,17 +1099,17 @@ fun HomeTabContent(
                                     }
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Оптимальный узел • Авто-подбор",
+                                        text = if (isConnected) "Квантовый туннель • Скоростное соединение" else "Оптимальный узел • Авто-подбор",
                                         fontSize = 11.sp,
                                         color = Color.Gray
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = selectedRoute.ifBlank { "Авто-выбор при подключении" },
+                                    text = if (isConnected) "В квантовом портале" else "Готов к погружению",
                                     fontSize = 16.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    color = if (isConnected) Color(0xFF00F5A0) else MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
