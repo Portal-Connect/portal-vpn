@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.compose.ui.graphics.Color
 
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+
 enum class ThemeMode(val displayName: String) {
     DARK("Тёмная"),
     LIGHT("Светлая"),
@@ -38,7 +41,46 @@ enum class AutopilotPriority(val title: String, val icon: String, val descriptio
 }
 
 class AppSettings(context: Context) {
-    private val prefs: SharedPreferences = context.getSharedPreferences("portal_settings", Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences by lazy {
+        try {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+                
+            val encryptedPrefs = EncryptedSharedPreferences.create(
+                context,
+                "portal_settings_secure",
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+            
+            // Migrate old unencrypted preferences if they exist
+            val oldPrefs = context.getSharedPreferences("portal_settings", Context.MODE_PRIVATE)
+            if (oldPrefs.all.isNotEmpty()) {
+                val editor = encryptedPrefs.edit()
+                for ((key, value) in oldPrefs.all) {
+                    when (value) {
+                        is String -> editor.putString(key, value)
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Float -> editor.putFloat(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is Set<*> -> {
+                            @Suppress("UNCHECKED_CAST")
+                            editor.putStringSet(key, value as Set<String>)
+                        }
+                    }
+                }
+                editor.apply()
+                oldPrefs.edit().clear().apply()
+            }
+            encryptedPrefs
+        } catch (e: Exception) {
+            // Fallback for devices with broken Android Keystore
+            context.getSharedPreferences("portal_settings", Context.MODE_PRIVATE)
+        }
+    }
 
     companion object {
         private const val KEY_THEME_MODE = "theme_mode"

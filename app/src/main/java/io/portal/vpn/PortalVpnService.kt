@@ -116,16 +116,32 @@ class PortalVpnService : VpnService() {
                 val selectedRoute = PortalCoreJni.getSelectedRoute()
                 Log.i(TAG, "Starting Portal VPN session (Xray + Mihomo) for route: $selectedRoute")
 
+                val dns1 = settings.dnsProvider.dns1
+                val dns2 = settings.dnsProvider.dns2
+
                 val builder = Builder()
                     .setSession("PORTAL VPN")
                     .addAddress("198.18.0.2", 30)
                     .addDnsServer("198.18.0.1")
-                    .addDnsServer("77.88.8.8")
+                    .addDnsServer(dns1)
                     // Explicitly route DNS servers to ensure UDP DNS packets enter the TUN interface
                     .addRoute("198.18.0.1", 32)
-                    .addRoute("77.88.8.8", 32)
+                    .addRoute(dns1, 32)
+                    .addRoute(dns2, 32)
                     .addRoute("0.0.0.0", 0)
+                    .allowBypass()
                     .setMtu(1500)
+
+                // Add split routing for LAN Bypass on modern Androids
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    try {
+                        builder.excludeRoute(android.net.IpPrefix("192.168.0.0/16"))
+                        builder.excludeRoute(android.net.IpPrefix("10.0.0.0/8"))
+                        builder.excludeRoute(android.net.IpPrefix("172.16.0.0/12"))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to exclude LAN routes", e)
+                    }
+                }
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     builder.setMetered(false)

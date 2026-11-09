@@ -376,6 +376,18 @@ object MihomoManager {
                 fakeIpFilters.append("    - \"$domain\"\n")
             }
 
+            // Read DNS settings dynamically
+            val settings = AppSettings(context)
+            val dnsProvider = settings.dnsProvider
+            val dns1 = dnsProvider.dns1
+            val dns2 = dnsProvider.dns2
+            val dnsUrls = when(dnsProvider) {
+                DnsProvider.CLOUDFLARE -> listOf("https://1.1.1.1/dns-query", "https://1.0.0.1/dns-query")
+                DnsProvider.GOOGLE -> listOf("https://dns.google/dns-query")
+                DnsProvider.ADGUARD -> listOf("https://dns.adguard-dns.com/dns-query")
+                DnsProvider.YANDEX -> listOf("https://dns.yandex.ru/dns-query")
+            }
+
             val tunBlock = """
 interface-name: $activeIface
 mixed-port: 7890
@@ -400,18 +412,17 @@ dns:
   fake-ip-range: 198.18.0.1/16
   respect-rules: true
   default-nameserver:
-    - 77.88.8.8
-    - 223.5.5.5
+    - $dns1
+    - $dns2
   proxy-server-nameserver:
-    - 77.88.8.8
-    - 223.5.5.5
+    - $dns1
+    - $dns2
   direct-nameserver:
-    - 77.88.8.8
-    - 223.5.5.5
+    - $dns1
+    - $dns2
   nameserver:
-    - https://1.1.1.1/dns-query
-    - https://dns.google/dns-query
-    - 77.88.8.8
+    - ${dnsUrls.joinToString("\n    - ")}
+    - $dns1
   fake-ip-filter:
 $fakeIpFilters
 """

@@ -73,6 +73,12 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    val batteryOptimizationLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { _ ->
+        // Returned from battery settings
+    }
+
     private val failoverReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == PortalFailoverWatchdog.ACTION_PORTAL_FAILOVER) {
