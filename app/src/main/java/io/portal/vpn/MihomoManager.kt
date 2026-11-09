@@ -464,17 +464,29 @@ $fakeIpFilters
                     directRulesBuilder.append("  - DOMAIN-SUFFIX,$domain,DIRECT\n")
                 }
 
-                // Explicit AI rules to ensure Gemini and OpenAI always route through AI / Google group
-                val aiTarget = if (content.contains("name: AI")) "AI" else if (content.contains("name: Google / Youtube / Gemini")) "Google / Youtube / Gemini" else "PROXY"
+                // Explicit AI rules to ensure Gemini, OpenAI, and YouTube always route through Finland directly
+                val aiTarget = if (content.contains("name: 🇫🇮 Финляндия") || content.contains("Финляндия")) "🇫🇮 Финляндия" else "PROXY"
+                
+                // Gemini & Google AI
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,gemini.google.com,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,bard.google.com,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,generativelanguage.googleapis.com,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,alkalimakersuite-pa.clients6.google.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-KEYWORD,gemini,$aiTarget\n")
+                
+                // OpenAI / ChatGPT
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,chatgpt.com,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,openai.com,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,oaistatic.com,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,oaiusercontent.com,$aiTarget\n")
-                directRulesBuilder.append("  - DOMAIN-KEYWORD,gemini,$aiTarget\n")
+                
+                // YouTube
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,youtube.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,youtube-nocookie.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,googlevideo.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,ytimg.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-SUFFIX,ggpht.com,$aiTarget\n")
+                directRulesBuilder.append("  - DOMAIN-KEYWORD,youtube,$aiTarget\n")
 
                 val settings = AppSettings(context)
                 if (settings.bypassRussianServices) {
