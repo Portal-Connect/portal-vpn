@@ -13,5 +13,6 @@ data class VpnNode(
     val flow: String = "",
     val network: String = "tcp",
     val fingerprint: String = "chrome",
-    val isGroup: Boolean = false
+    val isGroup: Boolean = false,
+    val type: String = "vless"
 )

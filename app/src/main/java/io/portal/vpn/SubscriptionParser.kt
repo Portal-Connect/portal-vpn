@@ -7,6 +7,7 @@ import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.File
@@ -97,7 +98,6 @@ object SubscriptionParser {
         val trimmed = urlStr.trim()
         if (trimmed.isBlank()) return@withContext emptyList()
 
-        // If the user pasted a single node link (vless://, vmess://, trojan://, ss://)
         if (trimmed.startsWith("vless://") || trimmed.startsWith("vmess://") ||
             trimmed.startsWith("trojan://") || trimmed.startsWith("ss://") ||
             trimmed.startsWith("hysteria2://") || trimmed.startsWith("hy2://")) {
@@ -136,7 +136,7 @@ object SubscriptionParser {
                 connectTimeout = 15000
                 readTimeout = 15000
                 instanceFollowRedirects = false
-                setRequestProperty("User-Agent", "ClashMeta/1.19.0 (portal-android)")
+                setRequestProperty("User-Agent", "Shadowrocket/1982")
                 setRequestProperty("X-HWID", hwid)
                 setRequestProperty("x-hwid", hwid)
                 setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml,text/plain,*/*")
@@ -178,12 +178,17 @@ object SubscriptionParser {
         val decodedContent = tryDecodeBase64(trimmedContent)
         val nodeNames = mutableListOf<String>()
 
-        // 1. Try parsing as Clash Meta YAML if "proxies:" is present
-        if (decodedContent.contains("proxies:")) {
+        // 1. Check if response is a Shadowrocket JSON array of Xray configs
+        if (decodedContent.startsWith("[") && (decodedContent.contains("remarks") || decodedContent.contains("outbounds"))) {
+            parseShadowrocketJson(decodedContent, nodeNames)
+        }
+
+        // 2. Try parsing as Clash Meta YAML if "proxies:" is present
+        if (nodeNames.isEmpty() && decodedContent.contains("proxies:")) {
             parseClashYaml(decodedContent, nodeNames)
         }
 
-        // 2. Try parsing line-by-line URI links (vless://, vmess://, trojan://, ss://, hysteria2://)
+        // 3. Try parsing line-by-line URI links (vless://, vmess://, trojan://, ss://, hysteria2://)
         val lines = decodedContent.lines()
         for (line in lines) {
             val trimmedLine = line.trim()
@@ -202,9 +207,11 @@ object SubscriptionParser {
             }
         }
 
-        // If nothing was parsed from decodedContent, try the raw content
         if (nodeNames.isEmpty() && decodedContent != trimmedContent) {
-            if (trimmedContent.contains("proxies:")) {
+            if (trimmedContent.startsWith("[") && (trimmedContent.contains("remarks") || trimmedContent.contains("outbounds"))) {
+                parseShadowrocketJson(trimmedContent, nodeNames)
+            }
+            if (nodeNames.isEmpty() && trimmedContent.contains("proxies:")) {
                 parseClashYaml(trimmedContent, nodeNames)
             }
             for (line in trimmedContent.lines()) {
@@ -234,6 +241,133 @@ object SubscriptionParser {
         return nodeNames
     }
 
+    private fun parseShadowrocketJson(jsonStr: String, nodeNames: MutableList<String>) {
+        try {
+            val jsonArray = JSONArray(jsonStr)
+            for (i in 0 until jsonArray.length()) {
+                val item = jsonArray.getJSONObject(i)
+                val remarks = item.optString("remarks", item.optString("name", "")).trim()
+                if (remarks.isBlank()) continue
+
+                val outbounds = item.optJSONArray("outbounds") ?: continue
+                var proxyObj: JSONObject? = null
+                for (j in 0 until outbounds.length()) {
+                    val ob = outbounds.getJSONObject(j)
+                    if (ob.optString("tag") == "proxy" || j == 0) {
+                        proxyObj = ob
+                        if (ob.optString("tag") == "proxy") break
+                    }
+                }
+                if (proxyObj == null) continue
+
+                val protocol = proxyObj.optString("protocol", "vless").lowercase()
+                val settings = proxyObj.optJSONObject("settings")
+                val streamSettings = proxyObj.optJSONObject("streamSettings")
+
+                var server = ""
+                var port = 443
+                var uuid = ""
+                var flow = ""
+
+                if (settings != null) {
+                    val vnext = settings.optJSONArray("vnext")
+                    if (vnext != null && vnext.length() > 0) {
+                        val vn0 = vnext.getJSONObject(0)
+                        server = vn0.optString("address", "")
+                        port = vn0.optInt("port", 443)
+                        val users = vn0.optJSONArray("users")
+                        if (users != null && users.length() > 0) {
+                            val u0 = users.getJSONObject(0)
+                            uuid = u0.optString("id", u0.optString("password", ""))
+                            flow = u0.optString("flow", "")
+                        }
+                    } else if (settings.has("address")) {
+                        server = settings.optString("address", "")
+                        port = settings.optInt("port", 443)
+                        uuid = settings.optString("auth", settings.optString("password", ""))
+                    }
+                }
+
+                var network = "tcp"
+                var host = server
+                var path = ""
+                var isReality = false
+                var publicKey = ""
+                var shortId = ""
+                var fingerprint = "chrome"
+
+                if (streamSettings != null) {
+                    network = streamSettings.optString("network", "tcp")
+                    val security = streamSettings.optString("security", "")
+                    if (security.equals("reality", ignoreCase = true)) {
+                        isReality = true
+                        val realitySettings = streamSettings.optJSONObject("realitySettings")
+                        if (realitySettings != null) {
+                            host = realitySettings.optString("serverName", server)
+                            publicKey = realitySettings.optString("publicKey", "")
+                            shortId = realitySettings.optString("shortId", "")
+                            val fp = realitySettings.optString("fingerprint", "chrome")
+                            fingerprint = if (fp.equals("firefox", ignoreCase = true)) "chrome" else fp
+                        }
+                    } else if (security.equals("tls", ignoreCase = true)) {
+                        val tlsSettings = streamSettings.optJSONObject("tlsSettings")
+                        if (tlsSettings != null) {
+                            host = tlsSettings.optString("serverName", server)
+                            val fp = tlsSettings.optString("fingerprint", "chrome")
+                            fingerprint = if (fp.equals("firefox", ignoreCase = true)) "chrome" else fp
+                        }
+                    }
+
+                    val xhttpSettings = streamSettings.optJSONObject("xhttpSettings")
+                    if (xhttpSettings != null) {
+                        path = xhttpSettings.optString("path", "")
+                        host = xhttpSettings.optString("host", host)
+                    } else {
+                        val wsSettings = streamSettings.optJSONObject("wsSettings")
+                        if (wsSettings != null) {
+                            path = wsSettings.optString("path", "")
+                            val headers = wsSettings.optJSONObject("headers")
+                            if (headers != null && headers.has("Host")) {
+                                host = headers.optString("Host", host)
+                            }
+                        }
+                    }
+
+                    val hysteriaSettings = streamSettings.optJSONObject("hysteriaSettings")
+                    if (hysteriaSettings != null && uuid.isBlank()) {
+                        uuid = hysteriaSettings.optString("auth", "")
+                    }
+                }
+
+                if (server.isNotBlank() && server != "0.0.0.0" && !remarks.contains("App not supported", ignoreCase = true)) {
+                    val nodeType = if (protocol == "hysteria") "hysteria2" else protocol
+                    val parsedNode = VpnNode(
+                        name = remarks,
+                        server = server,
+                        port = port,
+                        uuid = uuid,
+                        host = host,
+                        path = path,
+                        isReality = isReality,
+                        publicKey = publicKey,
+                        shortId = shortId,
+                        flow = flow,
+                        network = network,
+                        fingerprint = fingerprint,
+                        isGroup = false,
+                        type = nodeType
+                    )
+                    if (!nodeNames.contains(remarks)) {
+                        nodeNames.add(remarks)
+                        parsedNodesMap[remarks] = parsedNode
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing Shadowrocket JSON: ${e.message}", e)
+        }
+    }
+
     private fun tryDecodeBase64(raw: String): String {
         val clean = raw.replace("\n", "").replace("\r", "").replace(" ", "").trim()
         val decoders = listOf(
@@ -246,7 +380,7 @@ object SubscriptionParser {
             try {
                 val bytes = decoder()
                 val decoded = String(bytes, StandardCharsets.UTF_8)
-                if (decoded.contains("://") || decoded.contains("proxies:") || decoded.contains("- name:")) {
+                if (decoded.contains("://") || decoded.contains("proxies:") || decoded.contains("- name:") || decoded.startsWith("[")) {
                     return decoded
                 }
             } catch (_: Exception) {}
@@ -361,7 +495,6 @@ object SubscriptionParser {
         return try {
             val scheme = uriStr.substringBefore("://").lowercase()
 
-            // Handle vmess:// Base64 JSON format
             if (scheme == "vmess") {
                 val b64Part = uriStr.substringAfter("vmess://").trim()
                 val decodedJsonStr = tryDecodeBase64(b64Part)
@@ -423,7 +556,8 @@ object SubscriptionParser {
                 shortId = shortId,
                 flow = flow,
                 network = network,
-                fingerprint = fp
+                fingerprint = fp,
+                type = scheme
             )
         } catch (e: Exception) {
             Log.w(TAG, "Error parsing URI $uriStr: ${e.message}")
@@ -488,39 +622,52 @@ object SubscriptionParser {
         for (node in nodes) {
             val fp = if (node.fingerprint.isNotBlank() && !node.fingerprint.equals("firefox", ignoreCase = true)) node.fingerprint else "chrome"
             sb.append("  - name: \"${node.name}\"\n")
-            sb.append("    type: vless\n")
-            sb.append("    server: ${node.server}\n")
-            sb.append("    port: ${node.port}\n")
-            sb.append("    uuid: ${node.uuid}\n")
-            sb.append("    network: ${node.network}\n")
-            sb.append("    udp: true\n")
-            sb.append("    tls: true\n")
-            sb.append("    servername: ${node.host}\n")
-            sb.append("    client-fingerprint: $fp\n")
-
-            if (node.path.isNotBlank()) {
-                if (node.network == "xhttp") {
-                    sb.append("    xhttp-opts:\n")
-                    sb.append("      path: ${node.path}\n")
-                    sb.append("      host: ${node.host}\n")
-                } else if (node.network == "ws") {
-                    sb.append("    ws-opts:\n")
-                    sb.append("      path: ${node.path}\n")
-                    sb.append("      headers:\n")
-                    sb.append("        Host: ${node.host}\n")
+            if (node.type == "hysteria2" || node.type == "hysteria") {
+                sb.append("    type: hysteria2\n")
+                sb.append("    server: ${node.server}\n")
+                sb.append("    port: ${node.port}\n")
+                sb.append("    password: ${node.uuid}\n")
+                if (node.host.isNotBlank()) {
+                    sb.append("    sni: ${node.host}\n")
                 }
-            }
+                sb.append("    alpn:\n")
+                sb.append("      - h3\n")
+                sb.append("    client-fingerprint: $fp\n")
+            } else {
+                sb.append("    type: ${node.type.ifBlank { "vless" }}\n")
+                sb.append("    server: ${node.server}\n")
+                sb.append("    port: ${node.port}\n")
+                sb.append("    uuid: ${node.uuid}\n")
+                sb.append("    network: ${node.network}\n")
+                sb.append("    udp: true\n")
+                sb.append("    tls: true\n")
+                sb.append("    servername: ${node.host}\n")
+                sb.append("    client-fingerprint: $fp\n")
 
-            if (node.isReality) {
-                sb.append("    reality-opts:\n")
-                sb.append("      public-key: ${node.publicKey}\n")
-                if (node.shortId.isNotBlank()) {
-                    sb.append("      short-id: ${node.shortId}\n")
+                if (node.path.isNotBlank()) {
+                    if (node.network == "xhttp") {
+                        sb.append("    xhttp-opts:\n")
+                        sb.append("      path: ${node.path}\n")
+                        sb.append("      host: ${node.host}\n")
+                    } else if (node.network == "ws") {
+                        sb.append("    ws-opts:\n")
+                        sb.append("      path: ${node.path}\n")
+                        sb.append("      headers:\n")
+                        sb.append("        Host: ${node.host}\n")
+                    }
                 }
-                sb.append("      support-x25519mlkem768: true\n")
-            }
-            if (node.flow.isNotBlank()) {
-                sb.append("    flow: ${node.flow}\n")
+
+                if (node.isReality) {
+                    sb.append("    reality-opts:\n")
+                    sb.append("      public-key: ${node.publicKey}\n")
+                    if (node.shortId.isNotBlank()) {
+                        sb.append("      short-id: ${node.shortId}\n")
+                    }
+                    sb.append("      support-x25519mlkem768: true\n")
+                }
+                if (node.flow.isNotBlank()) {
+                    sb.append("    flow: ${node.flow}\n")
+                }
             }
         }
 
