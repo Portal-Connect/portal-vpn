@@ -208,6 +208,7 @@ $fakeIpFilters
                 val aiTarget = when {
                     content.contains("name: AI") -> "AI"
                     content.contains("name: Google / Youtube / Gemini") -> "Google / Youtube / Gemini"
+                    content.contains("name: 🇫🇷 Франция") || content.contains("Франция") -> "🇫🇷 Франция"
                     content.contains("name: 🇩🇪 Германия") || content.contains("Германия") -> "🇩🇪 Германия"
                     content.contains("name: 🇵🇱 Польша") || content.contains("Польша") -> "🇵🇱 Польша"
                     content.contains("name: 🇨🇭 Швейцария") || content.contains("Швейцария") -> "🇨🇭 Швейцария"
@@ -225,6 +226,18 @@ $fakeIpFilters
                         directRulesBuilder.append("  - $rule\n")
                     }
                 }
+
+                // Force TCP (TLS) for Gemini, OpenAI & YouTube to prevent QUIC IP/location leaks on Android
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,googlevideo.com)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,youtube.com)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-KEYWORD,youtube)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,gemini.google.com)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,gemini.google)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-KEYWORD,gemini)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,generativelanguage.googleapis.com)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,aistudio.google.com)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,chatgpt.com)),REJECT\n")
+                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,openai.com)),REJECT\n")
 
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,gemini.google.com,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,gemini.google,$aiTarget\n")
@@ -252,10 +265,6 @@ $fakeIpFilters
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,chat.openai.com,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-KEYWORD,openai,$aiTarget\n")
                 directRulesBuilder.append("  - DOMAIN-KEYWORD,chatgpt,$aiTarget\n")
-
-                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,googlevideo.com)),REJECT\n")
-                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-SUFFIX,youtube.com)),REJECT\n")
-                directRulesBuilder.append("  - AND,((NETWORK,UDP),(DST-PORT,443),(DOMAIN-KEYWORD,youtube)),REJECT\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,youtube.com,$ytTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,youtube-nocookie.com,$ytTarget\n")
                 directRulesBuilder.append("  - DOMAIN-SUFFIX,googlevideo.com,$ytTarget\n")

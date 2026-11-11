@@ -224,7 +224,7 @@ object MihomoApiClient {
     }
 
     private fun resolveBestAiNode(candidatesPool: List<String>): String? {
-        val countryPreferences = listOf("Германия", "Эстония", "Швейцария", "США", "Нидерланды", "Швеция")
+        val countryPreferences = listOf("Франция", "Германия", "Эстония", "Швейцария", "США", "Нидерланды", "Швеция", "Польша")
         val candidateNodes = mutableListOf<String>()
         for (country in countryPreferences) {
             val match = candidatesPool.firstOrNull { it.contains(country, ignoreCase = true) }
