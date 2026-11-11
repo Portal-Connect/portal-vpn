@@ -110,7 +110,12 @@ class PortalVpnService : VpnService() {
             }
             ACTION_STOP_VPN -> {
                 stopVpnSession()
-                stopForeground(true)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    stopForeground(STOP_FOREGROUND_REMOVE)
+                } else {
+                    @Suppress("DEPRECATION")
+                    stopForeground(true)
+                }
                 stopSelf()
             }
             ACTION_PING_TEST -> {
@@ -379,9 +384,13 @@ class PortalVpnService : VpnService() {
         }
         vpnInterface = null
         TrafficStatsManager.resetSession()
-        VpnWidgetProvider.notifyWidgetUpdate(this)
-        VpnTileService.requestTileUpdate(this)
         HapticFeedbackManager.portalDisconnected(this)
+
+        serviceScope.launch {
+            delay(300)
+            VpnWidgetProvider.notifyWidgetUpdate(this@PortalVpnService)
+            VpnTileService.requestTileUpdate(this@PortalVpnService)
+        }
     }
 
     override fun onDestroy() {
