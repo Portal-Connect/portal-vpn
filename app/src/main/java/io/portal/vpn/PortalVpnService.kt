@@ -180,6 +180,7 @@ class PortalVpnService : VpnService() {
                 val builder = Builder()
                     .setSession("PORTAL VPN")
                     .addAddress("198.18.0.2", 30)
+                    .addDnsServer("198.18.0.1")
                     .addDnsServer(dns1)
                     .addDnsServer(dns2)
                     .addRoute("0.0.0.0", 0)
