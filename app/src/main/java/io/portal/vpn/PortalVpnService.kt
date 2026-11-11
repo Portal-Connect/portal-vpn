@@ -264,13 +264,12 @@ class PortalVpnService : VpnService() {
                     Log.w(TAG, "Failed to clear FD_CLOEXEC on TUN fd", e)
                 }
 
-                Log.i(TAG, "Starting native Prizrak-Core engine for route: $selectedRoute")
-                ByeDpiManager.startByeDpi(this@PortalVpnService)
-                SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
+                Log.i(TAG, "Starting native Mihomo (Prizrak-Core) engine for route: $selectedRoute")
                 val coreStarted = MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
                 if (!coreStarted) {
-                    Log.w(TAG, "Prizrak-Core start returned false, launching Tun2Socks fallback bridge...")
-                    Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
+                    Log.e(TAG, "Mihomo core engine failed health-check or crashed on startup")
+                    stopVpnSession()
+                    return@launch
                 }
 
                 serviceScope.launch {

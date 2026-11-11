@@ -102,6 +102,12 @@ object MihomoManager {
                 }
             }
 
+            try {
+                logConfigDump("config.yaml", configFile.readText(Charsets.UTF_8))
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not dump config.yaml: ${e.message}")
+            }
+
             Log.i(TAG, "Starting Mihomo core with config: ${configFile.absolutePath} (${configFile.length()} bytes)")
             try {
                 val pb = ProcessBuilder(
@@ -119,12 +125,44 @@ object MihomoManager {
                     try {
                         proc.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
                             for (line in lines) {
-                                Log.i("MIHOMO_CORE", line)
+                                if (line.contains("level=error") || line.contains("level=fatal") || line.contains("error")) {
+                                    Log.e("MihomoCore", line)
+                                } else if (line.contains("level=warning") || line.contains("level=warn")) {
+                                    Log.w("MihomoCore", line)
+                                } else {
+                                    Log.i("MihomoCore", line)
+                                }
                             }
                         }
                     } catch (e: Exception) {
-                        Log.w(TAG, "Mihomo log reader ended")
+                        Log.w(TAG, "Mihomo Core output stream closed: ${e.message}")
                     }
+                }
+
+                var healthy = false
+                val startTime = System.currentTimeMillis()
+                while (System.currentTimeMillis() - startTime < 10_000) {
+                    if (!proc.isAlive) {
+                        val exitCode = try { proc.exitValue() } catch (_: Exception) { -1 }
+                        Log.e(TAG, "Mihomo process exited prematurely with code: $exitCode")
+                        return@withContext false
+                    }
+                    try {
+                        val socket = java.net.Socket()
+                        socket.connect(java.net.InetSocketAddress("127.0.0.1", 9090), 500)
+                        socket.close()
+                        healthy = true
+                        Log.i(TAG, "Mihomo REST API (127.0.0.1:9090) responded successfully after ${System.currentTimeMillis() - startTime}ms")
+                        break
+                    } catch (_: Exception) {
+                        kotlinx.coroutines.delay(300)
+                    }
+                }
+
+                if (!healthy) {
+                    Log.e(TAG, "Mihomo REST API (127.0.0.1:9090) failed to respond within 10 seconds")
+                    stopMihomo()
+                    return@withContext false
                 }
 
                 Log.i(TAG, "Mihomo core process started successfully")
@@ -138,29 +176,27 @@ object MihomoManager {
     fun fetchAndSaveConfig(subUrl: String, destFile: File): Boolean {
         if (subUrl.isBlank()) return false
         try {
-            Log.i(TAG, "Fetching ClashMeta config from $subUrl...")
+            Log.i(TAG, "Fetching subscription config from $subUrl...")
             val content = SubscriptionParser.downloadWithRedirects(subUrl, 5)
-            if (content.contains("proxies:")) {
-                var finalContent = content
-                if (!finalContent.contains("proxy-groups:")) {
-                    val allNodes = SubscriptionParser.getAllNodes()
-                    val sb = StringBuilder("\nproxy-groups:\n  - name: PROXY\n    type: select\n    proxies:\n")
-                    for (node in allNodes) {
-                        sb.append("      - \"${node.name}\"\n")
-                    }
-                    sb.append("rules:\n  - IP-CIDR,127.0.0.0/8,DIRECT,no-resolve\n  - MATCH,PROXY\n")
-                    finalContent += sb.toString()
-                }
-                destFile.writeText(finalContent, Charsets.UTF_8)
-                Log.i(TAG, "Successfully downloaded ClashMeta config (${finalContent.length} bytes)")
+            val routes = SubscriptionParser.parseSubscriptionContent(content)
+            if (routes.isNotEmpty()) {
+                val clashYaml = SubscriptionParser.buildClashConfigForNodes(SubscriptionParser.getAllNodes())
+                destFile.writeText(clashYaml, Charsets.UTF_8)
+                Log.i(TAG, "Successfully built Clash config (${clashYaml.length} bytes) for ${routes.size} routes")
                 return true
-            } else {
-                Log.w(TAG, "Downloaded content does not contain 'proxies:'")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error fetching subscription config: ${e.message}")
         }
         return false
+    }
+
+    private fun logConfigDump(label: String, content: String) {
+        Log.i("VpnConfigDump", "=== START $label (${content.length} bytes) ===")
+        content.chunked(1000).forEach { chunk ->
+            Log.i("VpnConfigDump", chunk)
+        }
+        Log.i("VpnConfigDump", "=== END $label ===")
     }
 
     private fun getOrExtractBinary(context: Context): File? {

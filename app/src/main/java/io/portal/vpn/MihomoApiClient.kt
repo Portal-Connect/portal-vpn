@@ -13,6 +13,7 @@ object MihomoApiClient {
 
     fun selectProxyNode(nodeName: String, context: Context? = null) {
         Executors.newSingleThreadExecutor().execute {
+            if (!MihomoManager.isRunning) return@execute
             var cachedAiNode: String? = null
             var cachedYtNode: String? = null
             val useByeDpi = context?.let { AppSettings(it).youtubeNoAdsBypass } ?: true

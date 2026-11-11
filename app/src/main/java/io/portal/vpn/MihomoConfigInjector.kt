@@ -107,11 +107,13 @@ tun:
   enable: true
   stack: gvisor
   file-descriptor: $tunFd
-  auto-route: false
+  auto-route: true
   auto-detect-interface: false
   dns-hijack:
     - any:53
     - tcp://any:53
+  inet4-address:
+    - 198.18.0.1/15
 
 dns:
   enable: true
@@ -156,48 +158,6 @@ $fakeIpFilters
                 newContent = newContent.replaceFirst("proxies:\n", bridgeProxy)
             }
 
-            if (newContent.contains("proxy-groups:") && !newContent.contains("name: YouTube\n") && !newContent.contains("name: \"YouTube\"")) {
-                val allNodeNames = mutableListOf<String>()
-                val nameRegex = Regex("""^\s*-\s+name:\s*['"]?([^'"\n\r]+)['"]?""")
-                var inProxies = false
-                for (line in content.lines()) {
-                    if (line.startsWith("proxies:")) {
-                        inProxies = true
-                        continue
-                    }
-                    if (inProxies && line.isNotEmpty() && !line[0].isWhitespace()) {
-                        inProxies = false
-                    }
-                    if (inProxies) {
-                        val m = nameRegex.find(line)
-                        if (m != null) {
-                            val n = m.groupValues[1].trim()
-                            if (n.isNotEmpty() && !allNodeNames.contains(n)) {
-                                allNodeNames.add(n)
-                            }
-                        }
-                    }
-                }
-                val ytSb = StringBuilder("proxy-groups:\n  - name: YouTube\n    icon: https://cdn.jsdelivr.net/gh/Koolson/Qure@master/IconSet/Color/YouTube.png\n    type: select\n    proxies:\n")
-                ytSb.append("      - \"ByeDPI (Anti-DPI / 0 Ads)\"\n")
-                val preferred = listOf("Германия", "Польша", "Эстония", "Швейцария", "США", "Россия")
-                val added = mutableSetOf<String>()
-                added.add("ByeDPI (Anti-DPI / 0 Ads)")
-                for (p in preferred) {
-                    val match = allNodeNames.firstOrNull { it.contains(p, ignoreCase = true) }
-                    if (match != null && added.add(match)) {
-                        ytSb.append("      - \"$match\"\n")
-                    }
-                }
-                for (n in allNodeNames) {
-                    if (added.add(n)) {
-                        ytSb.append("      - \"$n\"\n")
-                    }
-                }
-                ytSb.append("      - DIRECT\n")
-                newContent = newContent.replaceFirst("proxy-groups:\n", ytSb.toString())
-            }
-
             if (newContent.contains("rules:")) {
                 val directRulesBuilder = StringBuilder()
                 directRulesBuilder.append("rules:\n")
@@ -212,25 +172,8 @@ $fakeIpFilters
                 directRulesBuilder.append("  - IP-CIDR,1.1.1.1/32,DIRECT,no-resolve\n")
                 directRulesBuilder.append("  - IP-CIDR,8.8.8.8/32,DIRECT,no-resolve\n")
 
-                for (domain in proxyDomains) {
-                    directRulesBuilder.append("  - DOMAIN-SUFFIX,$domain,DIRECT\n")
-                }
-
-                val aiTarget = when {
-                    content.contains("name: AI") -> "AI"
-                    content.contains("name: Google / Youtube / Gemini") -> "Google / Youtube / Gemini"
-                    content.contains("name: 🇫🇷 Франция") || content.contains("Франция") -> "🇫🇷 Франция"
-                    content.contains("name: 🇩🇪 Германия") || content.contains("Германия") -> "🇩🇪 Германия"
-                    content.contains("name: 🇵🇱 Польша") || content.contains("Польша") -> "🇵🇱 Польша"
-                    content.contains("name: 🇨🇭 Швейцария") || content.contains("Швейцария") -> "🇨🇭 Швейцария"
-                    content.contains("name: 🇺🇸 США") || content.contains("США") -> "🇺🇸 США"
-                    content.contains("name: 🇳🇱 Нидерланды") || content.contains("Нидерланды") -> "🇳🇱 Нидерланды"
-                    content.contains("name: 🇸🇪 Швеция") || content.contains("Швеция") -> "🇸🇪 Швеция"
-                    content.contains("name: 🇫🇮 Финляндия") || content.contains("Финляндия") -> "🇫🇮 Финляндия"
-                    else -> "PROXY"
-                }
-
-                val ytTarget = if (newContent.contains("name: YouTube")) "YouTube" else "Google / Youtube / Gemini"
+                val aiTarget = "PROXY"
+                val ytTarget = "PROXY"
 
                 if (settings.blockAds) {
                     for (rule in AdBlockManager.getMihomoAdBlockRules()) {

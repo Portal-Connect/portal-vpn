@@ -232,12 +232,6 @@ object SubscriptionParser {
             }
         }
 
-        if (nodeNames.isNotEmpty()) {
-            if (!nodeNames.contains("⚡️ Автовыбор сервера") && !nodeNames.any { it.contains("Auto") || it.contains("Авто") }) {
-                nodeNames.add(0, "⚡️ Автовыбор сервера")
-            }
-        }
-
         return nodeNames
     }
 
@@ -248,6 +242,7 @@ object SubscriptionParser {
                 val item = jsonArray.getJSONObject(i)
                 val remarks = item.optString("remarks", item.optString("name", "")).trim()
                 if (remarks.isBlank()) continue
+                if (remarks.contains("Авто", ignoreCase = true) || remarks.contains("Auto", ignoreCase = true) || remarks.contains("PROXY", ignoreCase = true) || remarks.contains("GLOBAL", ignoreCase = true)) continue
 
                 val outbounds = item.optJSONArray("outbounds") ?: continue
                 var proxyObj: JSONObject? = null
@@ -421,7 +416,9 @@ object SubscriptionParser {
 
         fun commitNode() {
             val name = currentName ?: return
+            val isGroupName = name == "⚡️ Автовыбор сервера" || name == "PROXY" || name == "GLOBAL" || name == "Proxy" || name == "GLOBAL-PROXY" || name.contains("Автовыбор", ignoreCase = true) || name.contains("Auto", ignoreCase = true)
             if (inProxies &&
+                !isGroupName &&
                 currentServer != "0.0.0.0" &&
                 !name.contains("App not supported", ignoreCase = true) &&
                 !name.contains("not supported", ignoreCase = true) &&
@@ -622,11 +619,11 @@ object SubscriptionParser {
         sb.append("  stack: gvisor\n")
         sb.append("  device: tun0\n")
         sb.append("  inet4-address:\n")
-        sb.append("    - 172.19.0.1/30\n")
+        sb.append("    - 198.18.0.1/15\n")
         if (tunFd > 0) {
             sb.append("  file-descriptor: $tunFd\n")
         }
-        sb.append("  auto-route: false\n")
+        sb.append("  auto-route: true\n")
         sb.append("  auto-detect-interface: false\n")
         sb.append("  dns-hijack:\n")
         sb.append("    - any:53\n")
@@ -690,6 +687,15 @@ object SubscriptionParser {
             }
         }
 
+        val realNodes = nodes.filter { node ->
+            !node.isGroup &&
+            node.name != "PROXY" &&
+            node.name != "GLOBAL" &&
+            node.name != "Proxy" &&
+            node.name != "GLOBAL-PROXY" &&
+            !node.name.contains("Автовыбор", ignoreCase = true)
+        }
+
         sb.append("proxy-groups:\n")
         sb.append("  - name: \"⚡️ Автовыбор сервера\"\n")
         sb.append("    type: url-test\n")
@@ -697,22 +703,21 @@ object SubscriptionParser {
         sb.append("    interval: 300\n")
         sb.append("    tolerance: 50\n")
         sb.append("    proxies:\n")
-        for (node in nodes) {
+        for (node in realNodes) {
             sb.append("      - \"${node.name}\"\n")
         }
         sb.append("  - name: PROXY\n")
         sb.append("    type: select\n")
         sb.append("    proxies:\n")
         sb.append("      - \"⚡️ Автовыбор сервера\"\n")
-        for (node in nodes) {
+        for (node in realNodes) {
             sb.append("      - \"${node.name}\"\n")
         }
         sb.append("  - name: GLOBAL\n")
         sb.append("    type: select\n")
         sb.append("    proxies:\n")
         sb.append("      - PROXY\n")
-        sb.append("      - \"⚡️ Автовыбор сервера\"\n")
-        for (node in nodes) {
+        for (node in realNodes) {
             sb.append("      - \"${node.name}\"\n")
         }
 

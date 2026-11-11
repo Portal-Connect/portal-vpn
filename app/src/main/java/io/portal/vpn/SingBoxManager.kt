@@ -28,12 +28,60 @@ object SingBoxManager {
             return false
         }
         configFile.writeText(configJson)
+        logConfigDump("singbox.json", configJson)
 
         Log.i(TAG, "Starting sing-box with config: ${configFile.absolutePath} for route: $routeName")
         return try {
             val pb = ProcessBuilder(binaryFile.absolutePath, "run", "-c", configFile.absolutePath)
             pb.directory(context.filesDir)
-            singBoxProcess = pb.start()
+            pb.redirectErrorStream(true)
+            val proc = pb.start()
+            singBoxProcess = proc
+
+            java.util.concurrent.Executors.newSingleThreadExecutor().execute {
+                try {
+                    proc.inputStream.bufferedReader(Charsets.UTF_8).useLines { lines ->
+                        for (line in lines) {
+                            if (line.contains("error", ignoreCase = true) || line.contains("fatal", ignoreCase = true)) {
+                                Log.e("SingBoxCore", line)
+                            } else if (line.contains("warn", ignoreCase = true)) {
+                                Log.w("SingBoxCore", line)
+                            } else {
+                                Log.i("SingBoxCore", line)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "SingBox Core output stream closed: ${e.message}")
+                }
+            }
+
+            var healthy = false
+            val startTime = System.currentTimeMillis()
+            while (System.currentTimeMillis() - startTime < 10_000) {
+                if (!proc.isAlive) {
+                    val exitCode = try { proc.exitValue() } catch (_: Exception) { -1 }
+                    Log.e(TAG, "sing-box process exited prematurely with exit code: $exitCode")
+                    return false
+                }
+                try {
+                    val socket = java.net.Socket()
+                    socket.connect(java.net.InetSocketAddress("127.0.0.1", 2080), 500)
+                    socket.close()
+                    healthy = true
+                    Log.i(TAG, "sing-box bridge (127.0.0.1:2080) responded successfully after ${System.currentTimeMillis() - startTime}ms")
+                    break
+                } catch (_: Exception) {
+                    Thread.sleep(300)
+                }
+            }
+
+            if (!healthy) {
+                Log.e(TAG, "sing-box bridge (127.0.0.1:2080) failed to respond within 10 seconds")
+                stopSingBox()
+                return false
+            }
+
             Log.i(TAG, "sing-box process started successfully")
             true
         } catch (e: Exception) {
@@ -94,6 +142,14 @@ object SingBoxManager {
         }
     }
 
+    private fun logConfigDump(label: String, content: String) {
+        Log.i("VpnConfigDump", "=== START $label (${content.length} bytes) ===")
+        content.chunked(1000).forEach { chunk ->
+            Log.i("VpnConfigDump", chunk)
+        }
+        Log.i("VpnConfigDump", "=== END $label ===")
+    }
+
     private fun generateSingBoxConfig(routeName: String): String {
         val node = SubscriptionParser.getNodeByName(routeName) ?: return ""
         if (node.server.isBlank()) return ""
@@ -147,9 +203,7 @@ object SingBoxManager {
             """.trimIndent()
         } else ""
 
-        val flowBlock = if (flow.isNotEmpty()) {
-            ",\"flow\": \"$flow\""
-        } else ""
+        val flowVal = flow.ifEmpty { "xtls-rprx-vision" }
 
         return """
         {
@@ -170,8 +224,8 @@ object SingBoxManager {
               "tag": "proxy",
               "server": "$server",
               "server_port": $port,
-              "uuid": "$uuid"
-              $flowBlock,
+              "uuid": "$uuid",
+              "flow": "$flowVal",
               $tlsBlock
               $transportBlock
             }
