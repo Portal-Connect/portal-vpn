@@ -266,6 +266,7 @@ object SubscriptionParser {
 
                 var server = ""
                 var port = 443
+                var ports = ""
                 var uuid = ""
                 var flow = ""
 
@@ -337,6 +338,17 @@ object SubscriptionParser {
                     if (hysteriaSettings != null && uuid.isBlank()) {
                         uuid = hysteriaSettings.optString("auth", "")
                     }
+
+                    val finalmask = streamSettings.optJSONObject("finalmask")
+                    if (finalmask != null) {
+                        val quicParams = finalmask.optJSONObject("quicParams")
+                        if (quicParams != null) {
+                            val udpHop = quicParams.optJSONObject("udpHop")
+                            if (udpHop != null) {
+                                ports = udpHop.optString("ports", "")
+                            }
+                        }
+                    }
                 }
 
                 if (server.isNotBlank() && server != "0.0.0.0" && !remarks.contains("App not supported", ignoreCase = true)) {
@@ -345,6 +357,7 @@ object SubscriptionParser {
                         name = remarks,
                         server = server,
                         port = port,
+                        ports = ports,
                         uuid = uuid,
                         host = host,
                         path = path,
@@ -626,6 +639,9 @@ object SubscriptionParser {
                 sb.append("    type: hysteria2\n")
                 sb.append("    server: ${node.server}\n")
                 sb.append("    port: ${node.port}\n")
+                if (node.ports.isNotBlank()) {
+                    sb.append("    ports: ${node.ports}\n")
+                }
                 sb.append("    password: ${node.uuid}\n")
                 if (node.host.isNotBlank()) {
                     sb.append("    sni: ${node.host}\n")

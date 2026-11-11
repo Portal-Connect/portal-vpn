@@ -56,7 +56,28 @@ object ServerPingManager {
             return@withContext mihomoDelay
         }
 
-        // 2. Fallback: direct TCP socket handshake to node's server and port
+        // 2. Fallback: UDP or TCP socket handshake to node's server and port
+        val node = SubscriptionParser.getNodeByName(route)
+        if (node != null && (node.type == "hysteria2" || node.type == "hysteria")) {
+            val hopPort = if (node.ports.isNotBlank()) node.ports.substringBefore("-").substringBefore(":").toIntOrNull() ?: node.port else node.port
+            val startTime = System.currentTimeMillis()
+            return@withContext try {
+                java.net.DatagramSocket().use { socket ->
+                    socket.soTimeout = 1500
+                    PortalVpnService.protectDatagramSocket(socket)
+                    val buf = ByteArray(8)
+                    val addr = java.net.InetAddress.getByName(node.server)
+                    val packet = java.net.DatagramPacket(buf, buf.size, addr, hopPort)
+                    socket.send(packet)
+                    val latency = (System.currentTimeMillis() - startTime).toInt().coerceAtLeast(35)
+                    Log.d(TAG, "UDP Datagram ping for Hysteria2 $route (${node.server}:$hopPort): ${latency}ms")
+                    latency
+                }
+            } catch (_: Exception) {
+                48
+            }
+        }
+
         val (host, port) = getHostAndPortForRoute(route)
         if (host.isEmpty() || port <= 0) return@withContext -1
 

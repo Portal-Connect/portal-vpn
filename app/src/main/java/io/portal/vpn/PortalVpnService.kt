@@ -83,6 +83,10 @@ class PortalVpnService : VpnService() {
         fun protectSocket(socket: Socket): Boolean {
             return instance?.protect(socket) ?: false
         }
+
+        fun protectDatagramSocket(socket: java.net.DatagramSocket): Boolean {
+            return instance?.protect(socket) ?: false
+        }
     }
 
     private var vpnInterface: ParcelFileDescriptor? = null

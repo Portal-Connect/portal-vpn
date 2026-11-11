@@ -4,6 +4,7 @@ data class VpnNode(
     val name: String,
     val server: String = "",
     val port: Int = 443,
+    val ports: String = "",
     val uuid: String = "",
     val host: String = "",
     val path: String = "",
