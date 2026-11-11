@@ -86,9 +86,20 @@ object MihomoManager {
                 }
             }
 
-            val effectiveFd = if (pfd != null) 0 else tunFd
+            val effectiveFd = if (tunFd >= 0) tunFd else (pfd?.fd ?: -1)
             if (effectiveFd >= 0) {
                 MihomoConfigInjector.injectTunConfig(context, configFile, effectiveFd)
+            }
+
+            if (pfd != null) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                        Os.fcntlInt(pfd.fileDescriptor, OsConstants.F_SETFD, 0)
+                        Log.i(TAG, "Cleared FD_CLOEXEC on pfd fd: ${pfd.fd}")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Could not clear cloexec on pfd fd: ${e.message}")
+                }
             }
 
             Log.i(TAG, "Starting Mihomo core with config: ${configFile.absolutePath} (${configFile.length()} bytes)")
@@ -100,39 +111,8 @@ object MihomoManager {
                 )
                 pb.directory(context.filesDir)
                 pb.redirectErrorStream(true)
-                if (pfd != null) {
-                    pb.redirectInput(ProcessBuilder.Redirect.INHERIT)
-                }
 
-                val origStdin = try {
-                    Os.dup(FileDescriptor.`in`)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Could not dup stdin: ${e.message}")
-                    null
-                }
-
-                val proc = try {
-                    if (pfd != null) {
-                        Os.dup2(pfd.fileDescriptor, 0)
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                                Os.fcntlInt(FileDescriptor.`in`, OsConstants.F_SETFD, 0)
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Could not clear cloexec on fd 0: ${e.message}")
-                        }
-                    }
-                    pb.start()
-                } finally {
-                    if (origStdin != null) {
-                        try {
-                            Os.dup2(origStdin, 0)
-                            Os.close(origStdin)
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Could not restore stdin: ${e.message}")
-                        }
-                    }
-                }
+                val proc = pb.start()
                 mihomoProcess = proc
 
                 Executors.newSingleThreadExecutor().execute {

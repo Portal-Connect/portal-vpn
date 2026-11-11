@@ -106,14 +106,12 @@ sniffer:
 tun:
   enable: true
   stack: gvisor
-  device: "fd://$tunFd"
-  auto-route: true
+  file-descriptor: $tunFd
+  auto-route: false
   auto-detect-interface: false
   dns-hijack:
     - any:53
     - tcp://any:53
-  inet4-address:
-    - 198.18.0.1/16
 
 dns:
   enable: true

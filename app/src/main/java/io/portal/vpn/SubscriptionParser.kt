@@ -661,29 +661,31 @@ object SubscriptionParser {
                 sb.append("    servername: ${node.host}\n")
                 sb.append("    client-fingerprint: $fp\n")
 
-                if (node.path.isNotBlank()) {
-                    if (node.network == "xhttp") {
-                        sb.append("    xhttp-opts:\n")
-                        sb.append("      path: ${node.path}\n")
-                        sb.append("      host: ${node.host}\n")
-                    } else if (node.network == "ws") {
-                        sb.append("    ws-opts:\n")
-                        sb.append("      path: ${node.path}\n")
-                        sb.append("      headers:\n")
-                        sb.append("        Host: ${node.host}\n")
-                    }
+                if (node.network == "xhttp") {
+                    sb.append("    packet-encoding: xudp\n")
+                    sb.append("    alpn:\n")
+                    sb.append("      - h2\n")
+                    sb.append("      - http/1.1\n")
+                    sb.append("    xhttp-opts:\n")
+                    sb.append("      path: ${node.path.ifBlank { "/api/v3/media/session/poll" }}\n")
+                    sb.append("      host: ${node.host}\n")
+                    sb.append("      mode: packet-up\n")
+                } else if (node.network == "ws") {
+                    sb.append("    ws-opts:\n")
+                    sb.append("      path: ${node.path}\n")
+                    sb.append("      headers:\n")
+                    sb.append("        Host: ${node.host}\n")
                 }
 
                 if (node.isReality) {
+                    val flowVal = node.flow.ifBlank { "xtls-rprx-vision" }
+                    sb.append("    flow: $flowVal\n")
                     sb.append("    reality-opts:\n")
                     sb.append("      public-key: ${node.publicKey}\n")
                     if (node.shortId.isNotBlank()) {
                         sb.append("      short-id: ${node.shortId}\n")
                     }
                     sb.append("      support-x25519mlkem768: true\n")
-                }
-                if (node.flow.isNotBlank()) {
-                    sb.append("    flow: ${node.flow}\n")
                 }
             }
         }
