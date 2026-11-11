@@ -263,28 +263,13 @@ class PortalVpnService : VpnService() {
                     Log.w(TAG, "Failed to clear FD_CLOEXEC on TUN fd", e)
                 }
 
-                val selectedNode = SubscriptionParser.getNodeByName(selectedRoute)
-                val isFinalMaskRoute = selectedNode != null && selectedNode.rawXrayJson.isNotBlank() &&
-                        (selectedNode.rawXrayJson.contains("finalmask") || selectedNode.type == "hysteria2" || selectedNode.type == "hysteria")
-
-                if (isFinalMaskRoute && selectedNode != null) {
-                    Log.i(TAG, "Starting native Incycore (Xray) engine for FinalMask route: ${selectedNode.name}")
-                    val xrayConfig = buildXrayConfigForNode(selectedNode)
-                    if (xrayConfig.isNotBlank()) {
-                        Tun2SocksManager.stop()
-                        incycore.Incycore.startXrayWithTunFd(xrayConfig, tunFd)
-                    } else {
-                        MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
-                    }
-                } else {
-                    Log.i(TAG, "Starting native Mihomo engine for route: $selectedRoute")
-                    ByeDpiManager.startByeDpi(this@PortalVpnService)
-                    SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
-                    val mihomoStarted = MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
-                    if (!mihomoStarted) {
-                        Log.w(TAG, "Mihomo async start returned false, launching Tun2Socks fallback bridge...")
-                        Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
-                    }
+                Log.i(TAG, "Starting native Prizrak-Core engine for route: $selectedRoute")
+                ByeDpiManager.startByeDpi(this@PortalVpnService)
+                SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
+                val coreStarted = MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
+                if (!coreStarted) {
+                    Log.w(TAG, "Prizrak-Core start returned false, launching Tun2Socks fallback bridge...")
+                    Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
                 }
 
                 serviceScope.launch {
