@@ -158,13 +158,16 @@ class PortalVpnService : VpnService() {
         return START_STICKY
     }
 
+    private var vpnStartJob: Job? = null
+
     private fun startVpnSession() {
         if (isRunning) {
             Log.w(TAG, "VPN is already running")
             return
         }
 
-        serviceScope.launch {
+        vpnStartJob?.cancel()
+        vpnStartJob = serviceScope.launch(Dispatchers.IO) {
             try {
                 val settings = AppSettings(this@PortalVpnService)
                 val subUrl = settings.lastSubscriptionUrl.ifBlank {
