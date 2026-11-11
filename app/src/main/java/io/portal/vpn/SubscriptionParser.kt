@@ -136,7 +136,7 @@ object SubscriptionParser {
                 connectTimeout = 15000
                 readTimeout = 15000
                 instanceFollowRedirects = false
-                setRequestProperty("User-Agent", "v2rayN/6.23")
+                setRequestProperty("User-Agent", "ClashMeta/1.19.0 (portal-android)")
                 setRequestProperty("X-HWID", hwid)
                 setRequestProperty("x-hwid", hwid)
                 setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml,text/plain,*/*")
@@ -273,7 +273,8 @@ object SubscriptionParser {
 
         fun commitNode() {
             val name = currentName ?: return
-            if (currentServer != "0.0.0.0" &&
+            if (inProxies &&
+                currentServer != "0.0.0.0" &&
                 !name.contains("App not supported", ignoreCase = true) &&
                 !name.contains("not supported", ignoreCase = true) &&
                 !nodeNames.contains(name)) {
@@ -291,7 +292,7 @@ object SubscriptionParser {
                     flow = currentFlow,
                     network = currentNetwork,
                     fingerprint = if (currentFingerprint.isNotBlank()) currentFingerprint else "chrome",
-                    isGroup = inProxyGroups
+                    isGroup = false
                 )
             }
         }
