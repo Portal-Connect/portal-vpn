@@ -39,14 +39,22 @@ object PortalCoreJni {
         }
     }
 
-    suspend fun importSubscriptionAsync(url: String): List<String> {
+    fun setRoutes(routes: List<String>) {
+        if (routes.isNotEmpty()) {
+            portalConnectNodes.clear()
+            portalConnectNodes.addAll(routes)
+            if (selectedRoute.isBlank() || selectedRoute !in portalConnectNodes) {
+                selectedRoute = portalConnectNodes.first()
+            }
+        }
+    }
+
+    suspend fun importSubscriptionAsync(url: String, context: Context? = null): List<String> {
         Log.i(TAG, "importSubscriptionAsync called with URL: $url")
         fallbackUrl = url
-        val parsedNodes = SubscriptionParser.fetchAndParseSubscription(url)
+        val parsedNodes = SubscriptionParser.fetchAndParseSubscription(url, context)
         if (parsedNodes.isNotEmpty()) {
-            portalConnectNodes.clear()
-            portalConnectNodes.addAll(parsedNodes)
-            selectedRoute = portalConnectNodes.first()
+            setRoutes(parsedNodes)
         }
         return portalConnectNodes
     }

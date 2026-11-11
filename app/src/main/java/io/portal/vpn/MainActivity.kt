@@ -129,16 +129,25 @@ class MainActivity : ComponentActivity() {
             failoverFilter,
             androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED
         )
+        // Synchronously load saved config from local disk on startup
+        val configFile = java.io.File(filesDir, "config.yaml")
+        if (configFile.exists()) {
+            SubscriptionParser.loadSavedConfig(configFile, this)
+        }
+        refreshRoutes()
+        selectedRoute = PortalCoreJni.getSelectedRoute()
+
         if (settings.lastSubscriptionUrl.isNotBlank()) {
             lifecycleScope.launch {
-                PortalCoreJni.importSubscriptionAsync(settings.lastSubscriptionUrl)
+                PortalCoreJni.importSubscriptionAsync(settings.lastSubscriptionUrl, this@MainActivity)
                 SubscriptionParser.saveLastConfigToFile(java.io.File(filesDir, "config.yaml"))
                 refreshRoutes()
-                selectedRoute = PortalCoreJni.getSelectedRoute()
+                if (selectedRoute.isBlank()) {
+                    selectedRoute = PortalCoreJni.getSelectedRoute()
+                }
                 triggerPingAll()
             }
         }
-        refreshRoutes()
         triggerPingAll()
         startTrafficMonitor()
 
@@ -454,7 +463,7 @@ class MainActivity : ComponentActivity() {
         if (trimmed.isBlank()) return
         Toast.makeText(this, "Синхронизация сети порталов...", Toast.LENGTH_SHORT).show()
         lifecycleScope.launch {
-            val routes = PortalCoreJni.importSubscriptionAsync(trimmed)
+            val routes = PortalCoreJni.importSubscriptionAsync(trimmed, this@MainActivity)
             SubscriptionParser.saveLastConfigToFile(java.io.File(filesDir, "config.yaml"))
             refreshRoutes()
             selectedRoute = PortalCoreJni.getSelectedRoute()

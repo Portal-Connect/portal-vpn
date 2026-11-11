@@ -1,17 +1,22 @@
 ﻿package io.portal.vpn
 
+import android.content.Context
 import android.net.Uri
+import android.provider.Settings
 import android.util.Base64
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import java.io.BufferedReader
+import java.io.File
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.util.UUID
 import java.util.zip.GZIPInputStream
 
 object SubscriptionParser {
@@ -19,6 +24,29 @@ object SubscriptionParser {
     private val parsedNodesMap = LinkedHashMap<String, VpnNode>()
     var lastRawConfigContent: String = ""
         private set
+
+    private var cachedHwid: String? = null
+
+    fun getHwid(context: Context? = null): String {
+        cachedHwid?.let { return it }
+        if (context != null) {
+            try {
+                val androidId = Settings.Secure.getString(
+                    context.contentResolver,
+                    Settings.Secure.ANDROID_ID
+                )
+                if (!androidId.isNullOrBlank() && androidId != "9774d56d682e549c") {
+                    cachedHwid = androidId
+                    return androidId
+                }
+            } catch (_: Exception) {}
+        }
+        val fallback = UUID.nameUUIDFromBytes(
+            (android.os.Build.BOARD + android.os.Build.BRAND + android.os.Build.DEVICE + android.os.Build.MODEL).toByteArray()
+        ).toString().replace("-", "").take(16)
+        cachedHwid = fallback
+        return fallback
+    }
 
     fun getNodeByName(name: String): VpnNode? {
         return parsedNodesMap[name]
@@ -28,36 +56,66 @@ object SubscriptionParser {
         return parsedNodesMap.values.toList()
     }
 
-    fun saveLastConfigToFile(destFile: java.io.File): Boolean {
+    fun loadSavedConfig(configFile: File, context: Context? = null): List<String> {
+        if (!configFile.exists() || configFile.length() < 100) return emptyList()
+        return try {
+            val content = configFile.readText(StandardCharsets.UTF_8)
+            lastRawConfigContent = content
+            val routes = parseSubscriptionContent(content)
+            if (routes.isNotEmpty()) {
+                PortalCoreJni.setRoutes(routes)
+            }
+            Log.i(TAG, "Loaded ${routes.size} routes from local saved config: ${configFile.absolutePath}")
+            routes
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading saved config file", e)
+            emptyList()
+        }
+    }
+
+    fun saveLastConfigToFile(destFile: File): Boolean {
         return try {
             if (lastRawConfigContent.isNotBlank() && lastRawConfigContent.contains("proxies:")) {
                 destFile.writeText(lastRawConfigContent, StandardCharsets.UTF_8)
                 Log.i(TAG, "Saved raw subscription config to ${destFile.absolutePath} (${destFile.length()} bytes)")
                 true
+            } else if (parsedNodesMap.isNotEmpty()) {
+                val generatedClashYaml = buildClashConfigForNodes(getAllNodes())
+                destFile.writeText(generatedClashYaml, StandardCharsets.UTF_8)
+                Log.i(TAG, "Built and saved Clash config for ${parsedNodesMap.size} nodes to ${destFile.absolutePath}")
+                true
             } else {
                 false
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error saving raw subscription config to file", e)
+            Log.e(TAG, "Error saving subscription config to file", e)
             false
         }
     }
 
-    suspend fun fetchAndParseSubscription(urlStr: String): List<String> = withContext(Dispatchers.IO) {
+    suspend fun fetchAndParseSubscription(urlStr: String, context: Context? = null): List<String> = withContext(Dispatchers.IO) {
         val trimmed = urlStr.trim()
         if (trimmed.isBlank()) return@withContext emptyList()
 
         // If the user pasted a single node link (vless://, vmess://, trojan://, ss://)
         if (trimmed.startsWith("vless://") || trimmed.startsWith("vmess://") ||
-            trimmed.startsWith("trojan://") || trimmed.startsWith("ss://")) {
-            return@withContext parseSubscriptionContent(trimmed)
+            trimmed.startsWith("trojan://") || trimmed.startsWith("ss://") ||
+            trimmed.startsWith("hysteria2://") || trimmed.startsWith("hy2://")) {
+            val routes = parseSubscriptionContent(trimmed)
+            if (routes.isNotEmpty()) {
+                PortalCoreJni.setRoutes(routes)
+            }
+            return@withContext routes
         }
 
         try {
             Log.i(TAG, "Fetching subscription from $trimmed...")
-            val content = downloadWithRedirects(trimmed, 5)
+            val content = downloadWithRedirects(trimmed, 5, context)
             lastRawConfigContent = content
             val routes = parseSubscriptionContent(content)
+            if (routes.isNotEmpty()) {
+                PortalCoreJni.setRoutes(routes)
+            }
             Log.i(TAG, "Fetched and parsed ${routes.size} routes from subscription")
             routes
         } catch (e: Exception) {
@@ -66,9 +124,10 @@ object SubscriptionParser {
         }
     }
 
-    fun downloadWithRedirects(urlString: String, maxRedirects: Int = 5): String {
+    fun downloadWithRedirects(urlString: String, maxRedirects: Int = 5, context: Context? = null): String {
         var currentUrl = urlString
         var redirects = 0
+        val hwid = getHwid(context)
 
         while (redirects < maxRedirects) {
             val url = URL(currentUrl)
@@ -77,7 +136,9 @@ object SubscriptionParser {
                 connectTimeout = 15000
                 readTimeout = 15000
                 instanceFollowRedirects = false
-                setRequestProperty("User-Agent", "ClashMeta/1.19.0 (portal-android)")
+                setRequestProperty("User-Agent", "v2rayN/6.23")
+                setRequestProperty("X-HWID", hwid)
+                setRequestProperty("x-hwid", hwid)
                 setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml,text/plain,*/*")
                 setRequestProperty("Accept-Encoding", "gzip, deflate")
             }
@@ -122,14 +183,19 @@ object SubscriptionParser {
             parseClashYaml(decodedContent, nodeNames)
         }
 
-        // 2. Try parsing line-by-line URI links (vless://, vmess://, trojan://, ss://)
+        // 2. Try parsing line-by-line URI links (vless://, vmess://, trojan://, ss://, hysteria2://)
         val lines = decodedContent.lines()
         for (line in lines) {
             val trimmedLine = line.trim()
             if (trimmedLine.startsWith("vless://") || trimmedLine.startsWith("trojan://") ||
-                trimmedLine.startsWith("ss://") || trimmedLine.startsWith("vmess://")) {
+                trimmedLine.startsWith("ss://") || trimmedLine.startsWith("vmess://") ||
+                trimmedLine.startsWith("hysteria2://") || trimmedLine.startsWith("hy2://")) {
                 val parsedNode = parseNodeUri(trimmedLine)
-                if (parsedNode != null && !nodeNames.contains(parsedNode.name)) {
+                if (parsedNode != null &&
+                    parsedNode.server != "0.0.0.0" &&
+                    !parsedNode.name.contains("App not supported", ignoreCase = true) &&
+                    !parsedNode.name.contains("not supported", ignoreCase = true) &&
+                    !nodeNames.contains(parsedNode.name)) {
                     nodeNames.add(parsedNode.name)
                     parsedNodesMap[parsedNode.name] = parsedNode
                 }
@@ -144,9 +210,14 @@ object SubscriptionParser {
             for (line in trimmedContent.lines()) {
                 val trimmedLine = line.trim()
                 if (trimmedLine.startsWith("vless://") || trimmedLine.startsWith("trojan://") ||
-                    trimmedLine.startsWith("ss://") || trimmedLine.startsWith("vmess://")) {
+                    trimmedLine.startsWith("ss://") || trimmedLine.startsWith("vmess://") ||
+                    trimmedLine.startsWith("hysteria2://") || trimmedLine.startsWith("hy2://")) {
                     val parsedNode = parseNodeUri(trimmedLine)
-                    if (parsedNode != null && !nodeNames.contains(parsedNode.name)) {
+                    if (parsedNode != null &&
+                        parsedNode.server != "0.0.0.0" &&
+                        !parsedNode.name.contains("App not supported", ignoreCase = true) &&
+                        !parsedNode.name.contains("not supported", ignoreCase = true) &&
+                        !nodeNames.contains(parsedNode.name)) {
                         nodeNames.add(parsedNode.name)
                         parsedNodesMap[parsedNode.name] = parsedNode
                     }
@@ -165,18 +236,22 @@ object SubscriptionParser {
 
     private fun tryDecodeBase64(raw: String): String {
         val clean = raw.replace("\n", "").replace("\r", "").replace(" ", "").trim()
-        return try {
-            val bytes = Base64.decode(clean, Base64.DEFAULT)
-            val decoded = String(bytes, StandardCharsets.UTF_8)
-            // If the decoded string contains readable proxy indicators, use it
-            if (decoded.contains("://") || decoded.contains("proxies:") || decoded.contains("- name:")) {
-                decoded
-            } else {
-                raw
-            }
-        } catch (e: Exception) {
-            raw
+        val decoders = listOf(
+            { Base64.decode(clean, Base64.DEFAULT) },
+            { Base64.decode(clean, Base64.URL_SAFE) },
+            { Base64.decode(clean, Base64.NO_WRAP) },
+            { Base64.decode(clean, Base64.URL_SAFE or Base64.NO_WRAP) }
+        )
+        for (decoder in decoders) {
+            try {
+                val bytes = decoder()
+                val decoded = String(bytes, StandardCharsets.UTF_8)
+                if (decoded.contains("://") || decoded.contains("proxies:") || decoded.contains("- name:")) {
+                    return decoded
+                }
+            } catch (_: Exception) {}
         }
+        return raw
     }
 
     private fun parseClashYaml(yaml: String, nodeNames: MutableList<String>) {
@@ -198,7 +273,10 @@ object SubscriptionParser {
 
         fun commitNode() {
             val name = currentName ?: return
-            if (!nodeNames.contains(name)) {
+            if (currentServer != "0.0.0.0" &&
+                !name.contains("App not supported", ignoreCase = true) &&
+                !name.contains("not supported", ignoreCase = true) &&
+                !nodeNames.contains(name)) {
                 nodeNames.add(name)
                 parsedNodesMap[name] = VpnNode(
                     name = name,
@@ -280,8 +358,41 @@ object SubscriptionParser {
 
     private fun parseNodeUri(uriStr: String): VpnNode? {
         return try {
+            val scheme = uriStr.substringBefore("://").lowercase()
+
+            // Handle vmess:// Base64 JSON format
+            if (scheme == "vmess") {
+                val b64Part = uriStr.substringAfter("vmess://").trim()
+                val decodedJsonStr = tryDecodeBase64(b64Part)
+                if (decodedJsonStr.startsWith("{")) {
+                    val jsonObj = JSONObject(decodedJsonStr)
+                    val ps = jsonObj.optString("ps", "VMess Server")
+                    val add = jsonObj.optString("add")
+                    val port = jsonObj.optInt("port", 443)
+                    val id = jsonObj.optString("id")
+                    val net = jsonObj.optString("net", "tcp")
+                    val host = jsonObj.optString("host", jsonObj.optString("sni", add))
+                    val path = jsonObj.optString("path", "")
+                    if (add.isNotBlank() && id.isNotBlank()) {
+                        return VpnNode(
+                            name = ps,
+                            server = add,
+                            port = port,
+                            uuid = id,
+                            host = host,
+                            path = path,
+                            isReality = false,
+                            publicKey = "",
+                            shortId = "",
+                            flow = "",
+                            network = net,
+                            fingerprint = "chrome"
+                        )
+                    }
+                }
+            }
+
             val uri = Uri.parse(uriStr)
-            val scheme = uri.scheme?.lowercase() ?: return null
             val rawName = uri.fragment?.let { URLDecoder.decode(it, "UTF-8") }
             val server = uri.host ?: return null
             val port = if (uri.port > 0) uri.port else 443
@@ -297,7 +408,6 @@ object SubscriptionParser {
             val shortId = uri.getQueryParameter("sid") ?: ""
             val flow = uri.getQueryParameter("flow") ?: ""
             val rawFp = uri.getQueryParameter("fp") ?: uri.getQueryParameter("fingerprint") ?: "chrome"
-            // Ensure if someone passed outdated "firefox" in URL, we map it to "chrome" for Xray Reality post-quantum compatibility
             val fp = if (rawFp.equals("firefox", ignoreCase = true)) "chrome" else rawFp
 
             VpnNode(
