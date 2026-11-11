@@ -368,7 +368,8 @@ object SubscriptionParser {
                         network = network,
                         fingerprint = fingerprint,
                         isGroup = false,
-                        type = nodeType
+                        type = nodeType,
+                        rawXrayJson = item.toString()
                     )
                     if (!nodeNames.contains(remarks)) {
                         nodeNames.add(remarks)

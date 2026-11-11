@@ -15,5 +15,6 @@ data class VpnNode(
     val network: String = "tcp",
     val fingerprint: String = "chrome",
     val isGroup: Boolean = false,
-    val type: String = "vless"
+    val type: String = "vless",
+    val rawXrayJson: String = ""
 )

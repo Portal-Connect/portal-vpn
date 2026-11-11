@@ -22,6 +22,8 @@ import androidx.core.content.ContextCompat
 import io.portal.vpn.widget.VpnTileService
 import io.portal.vpn.widget.VpnWidgetProvider
 import kotlinx.coroutines.*
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.net.Socket
 
@@ -261,12 +263,28 @@ class PortalVpnService : VpnService() {
                     Log.w(TAG, "Failed to clear FD_CLOEXEC on TUN fd", e)
                 }
 
-                ByeDpiManager.startByeDpi(this@PortalVpnService)
-                SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
-                val mihomoStarted = MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
-                if (!mihomoStarted) {
-                    Log.w(TAG, "Mihomo async start returned false, launching Tun2Socks fallback bridge...")
-                    Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
+                val selectedNode = SubscriptionParser.getNodeByName(selectedRoute)
+                val isFinalMaskRoute = selectedNode != null && selectedNode.rawXrayJson.isNotBlank() &&
+                        (selectedNode.rawXrayJson.contains("finalmask") || selectedNode.type == "hysteria2" || selectedNode.type == "hysteria")
+
+                if (isFinalMaskRoute && selectedNode != null) {
+                    Log.i(TAG, "Starting native Incycore (Xray) engine for FinalMask route: ${selectedNode.name}")
+                    val xrayConfig = buildXrayConfigForNode(selectedNode)
+                    if (xrayConfig.isNotBlank()) {
+                        Tun2SocksManager.stop()
+                        incycore.Incycore.startXrayWithTunFd(xrayConfig, tunFd)
+                    } else {
+                        MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
+                    }
+                } else {
+                    Log.i(TAG, "Starting native Mihomo engine for route: $selectedRoute")
+                    ByeDpiManager.startByeDpi(this@PortalVpnService)
+                    SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
+                    val mihomoStarted = MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
+                    if (!mihomoStarted) {
+                        Log.w(TAG, "Mihomo async start returned false, launching Tun2Socks fallback bridge...")
+                        Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
+                    }
                 }
 
                 serviceScope.launch {
@@ -406,6 +424,61 @@ class PortalVpnService : VpnService() {
         serviceScope.cancel()
         if (instance == this) {
             instance = null
+        }
+    }
+
+    private fun buildXrayConfigForNode(node: VpnNode): String {
+        return try {
+            val nodeObj = JSONObject(node.rawXrayJson)
+            val outbounds = nodeObj.optJSONArray("outbounds") ?: JSONArray()
+            val dns = nodeObj.optJSONObject("dns")
+
+            val config = JSONObject().apply {
+                put("log", JSONObject().apply { put("loglevel", "warning") })
+                if (dns != null) put("dns", dns)
+                put("inbounds", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("tag", "portal-native-tun")
+                        put("protocol", "tun")
+                        put("settings", JSONObject().apply {
+                            put("name", "portal0")
+                            put("mtu", 1500)
+                        })
+                        put("sniffing", JSONObject().apply {
+                            put("enabled", true)
+                            put("destOverride", JSONArray().apply {
+                                put("http")
+                                put("tls")
+                            })
+                        })
+                    })
+                })
+                put("outbounds", outbounds)
+                put("routing", JSONObject().apply {
+                    put("domainStrategy", "IPIfNonMatch")
+                    put("rules", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("type", "field")
+                            put("ip", JSONArray().apply {
+                                put("127.0.0.0/8")
+                                put("10.0.0.0/8")
+                                put("172.16.0.0/12")
+                                put("192.168.0.0/16")
+                            })
+                            put("outboundTag", "direct")
+                        })
+                        put(JSONObject().apply {
+                            put("type", "field")
+                            put("network", "tcp,udp")
+                            put("outboundTag", "proxy")
+                        })
+                    })
+                })
+            }
+            config.toString()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error building Xray config for ${node.name}", e)
+            ""
         }
     }
 
