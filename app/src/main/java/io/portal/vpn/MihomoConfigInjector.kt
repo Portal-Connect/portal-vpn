@@ -9,7 +9,11 @@ object MihomoConfigInjector {
 
     fun injectTunConfig(context: Context, configFile: File, tunFd: Int) {
         try {
-            var content = configFile.readText(Charsets.UTF_8).replace("\r\n", "\n")
+            var content = configFile.readText(Charsets.UTF_8)
+                .replace("\r\n", "\n")
+                .replace("client-fingerprint: firefox", "client-fingerprint: chrome")
+                .replace("client-fingerprint: \"firefox\"", "client-fingerprint: \"chrome\"")
+                .replace("client-fingerprint: 'firefox'", "client-fingerprint: 'chrome'")
 
             val activeIface = try {
                 val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
@@ -100,7 +104,14 @@ sniffer:
       override-destination: true
 
 tun:
-  enable: false
+  enable: true
+  stack: gvisor
+  device: "fd://$tunFd"
+  auto-route: false
+  auto-detect-interface: false
+  dns-hijack:
+    - any:53
+    - tcp://any:53
 
 dns:
   enable: true

@@ -259,8 +259,11 @@ class PortalVpnService : VpnService() {
 
                 ByeDpiManager.startByeDpi(this@PortalVpnService)
                 SingBoxManager.startSingBox(this@PortalVpnService, selectedRoute)
-                MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
-                Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
+                val mihomoStarted = MihomoManager.startMihomoAsync(this@PortalVpnService, subUrl, tunFd, pfd)
+                if (!mihomoStarted) {
+                    Log.w(TAG, "Mihomo async start returned false, launching Tun2Socks fallback bridge...")
+                    Tun2SocksManager.start(this@PortalVpnService, tunFd, "127.0.0.1:7890")
+                }
 
                 serviceScope.launch {
                     delay(1200)
