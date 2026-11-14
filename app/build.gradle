@@ -4,6 +4,19 @@ plugins {
     id 'org.jetbrains.kotlin.plugin.compose'
 }
 
+// Signing material must never live in the repository. Put it in keystore.properties:
+//   storeFile=../portal-release.jks
+//   storePassword=...
+//   keyAlias=portal
+//   keyPassword=...
+// The file is gitignored; without it release builds fall back to the debug key.
+def keystoreProps = new Properties()
+def keystorePropsFile = rootProject.file('keystore.properties')
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+def hasReleaseKeystore = keystoreProps.getProperty('storeFile') != null
+
 android {
     namespace 'io.portal.vpn'
     compileSdk 35
@@ -23,10 +36,12 @@ android {
 
     signingConfigs {
         release {
-            storeFile file("../portal-release.jks")
-            storePassword "REDACTED-LEAKED-CREDENTIAL"
-            keyAlias "portal"
-            keyPassword "REDACTED-LEAKED-CREDENTIAL"
+            if (hasReleaseKeystore) {
+                storeFile rootProject.file(keystoreProps.getProperty('storeFile'))
+                storePassword keystoreProps.getProperty('storePassword')
+                keyAlias keystoreProps.getProperty('keyAlias')
+                keyPassword keystoreProps.getProperty('keyPassword')
+            }
             v1SigningEnabled true
             v2SigningEnabled true
         }
@@ -34,12 +49,12 @@ android {
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            signingConfig signingConfigs.release
+            signingConfig hasReleaseKeystore ? signingConfigs.release : signingConfigs.debug
             applicationIdSuffix ""
             debuggable true
         }

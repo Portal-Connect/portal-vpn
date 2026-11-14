@@ -18,3 +18,8 @@ output.json
 app/build/
 .kotlin
 scratch/
+
+# signing material must never be committed
+keystore.properties
+*.jks
+*.keystore
